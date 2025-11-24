@@ -42,6 +42,7 @@ let JoinChannel: IRCServiceBindings["JoinChannel"];
 let PartChannel: IRCServiceBindings["PartChannel"];
 let RemoveServer: IRCServiceBindings["RemoveServer"];
 let GetLogs: IRCServiceBindings["GetLogs"];
+let GetCurrentNick: IRCServiceBindings["GetCurrentNick"];
 
 export default function Home() {
   const [showAddServer, setShowAddServer] = useState(false);
@@ -67,6 +68,7 @@ export default function Home() {
       RemoveServer = module.RemoveServer;
       GetLogs = module.GetLogs;
       JoinChannel = module.JoinChannel;
+      GetCurrentNick = module.GetCurrentNick;
       setBindingsLoaded(true);
     });
   }, []);
@@ -572,6 +574,27 @@ interface ChatMessagesProps {
 function ChatMessages({ serverId, channel }: ChatMessagesProps) {
   const [messages, setMessages] = useState<(Message | null)[]>([]);
   const [loading, setLoading] = useState(false);
+  const [currentNick, setCurrentNick] = useState<string>("");
+
+  // Fetch current user's nickname
+  useEffect(() => {
+    if (!serverId || !GetCurrentNick) {
+      setCurrentNick("");
+      return;
+    }
+
+    const fetchNick = async () => {
+      try {
+        const nick = await GetCurrentNick(serverId);
+        setCurrentNick(nick);
+      } catch (error) {
+        console.debug("Failed to fetch current nick:", error);
+        setCurrentNick("");
+      }
+    };
+
+    fetchNick();
+  }, [serverId, GetCurrentNick]);
 
   // Fetch messages from backend
   const fetchMessages = async () => {
@@ -647,7 +670,11 @@ function ChatMessages({ serverId, channel }: ChatMessagesProps) {
           <div key={idx} className="px-1 py-0.5 hover:bg-accent/50 rounded text-[11px]">
             <span className="text-[10px] text-muted-foreground">{time}</span>
             <span className="mx-1.5 font-medium text-primary">{msg.from}:</span>
-            <MessageText text={msg.text} className="text-foreground" />
+            <MessageText
+              text={msg.text}
+              className="text-foreground"
+              currentNick={currentNick}
+            />
           </div>
         );
       })}

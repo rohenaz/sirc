@@ -1,12 +1,18 @@
 /**
- * MessageText component - Renders IRC messages with clickable links
+ * MessageText component - Renders IRC messages with clickable links and mentions
  */
 
-import { type MessagePart, parseMessage } from "@/lib/message-parser";
+import {
+  type MessagePart,
+  parseMessage,
+  parseMessageWithMentions,
+} from "@/lib/message-parser";
 
 interface MessageTextProps {
   text: string;
   className?: string;
+  currentNick?: string;
+  keywords?: string[];
 }
 
 /**
@@ -42,10 +48,19 @@ function MessagePartComponent({ part }: { part: MessagePart }) {
 }
 
 /**
- * Renders IRC message text with clickable URLs
+ * Renders IRC message text with clickable URLs and mention highlights
  */
-export function MessageText({ text, className = "" }: MessageTextProps) {
-  const parts = parseMessage(text);
+export function MessageText({
+  text,
+  className = "",
+  currentNick,
+  keywords = [],
+}: MessageTextProps) {
+  // Use mention parser if nickname is provided, otherwise basic parser
+  const parts =
+    currentNick && currentNick.trim()
+      ? parseMessageWithMentions(text, currentNick, keywords)
+      : parseMessage(text);
 
   return (
     <span className={className}>
