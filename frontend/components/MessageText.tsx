@@ -30,6 +30,14 @@ function MessagePartComponent({ part }: { part: MessagePart }) {
     );
   }
 
+  if (part.type === "mention") {
+    return (
+      <span className="bg-yellow-500/20 text-yellow-200 px-1 rounded font-medium">
+        {part.content}
+      </span>
+    );
+  }
+
   return <span>{part.content}</span>;
 }
 

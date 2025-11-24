@@ -4,9 +4,15 @@
  */
 
 export interface MessagePart {
-  type: "text" | "link";
+  type: "text" | "link" | "mention";
   content: string;
   url?: string;
+}
+
+export interface HighlightResult {
+  isMention: boolean;
+  isKeyword: boolean;
+  matchedKeyword?: string;
 }
 
 /**
@@ -147,4 +153,146 @@ export function isImageUrl(url: string): boolean {
 export function isVideoUrl(url: string): boolean {
   const videoExtensions = /\.(mp4|webm|ogg|mov|avi|mkv|flv)(?:\?|#|$)/i;
   return videoExtensions.test(url);
+}
+
+/**
+ * Checks if a message contains a mention of the specified nickname
+ */
+export function containsMention(message: string, nickname: string): boolean {
+  if (!message || !nickname) return false;
+
+  const messageLower = message.toLowerCase();
+  const nickLower = nickname.toLowerCase();
+
+  // Check for exact word match (with word boundaries)
+  const wordBoundaryRegex = new RegExp(`\\b${escapeRegex(nickLower)}\\b`, "i");
+  return wordBoundaryRegex.test(message);
+}
+
+/**
+ * Checks if a message contains any of the specified keywords
+ */
+export function containsKeyword(
+  message: string,
+  keywords: string[],
+): string | null {
+  if (!message || !keywords || keywords.length === 0) return null;
+
+  const messageLower = message.toLowerCase();
+
+  for (const keyword of keywords) {
+    const keywordLower = keyword.toLowerCase();
+    const regex = new RegExp(`\\b${escapeRegex(keywordLower)}\\b`, "i");
+    if (regex.test(message)) {
+      return keyword;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Checks if a message should trigger a highlight (mention or keyword)
+ */
+export function checkHighlight(
+  message: string,
+  nickname: string,
+  keywords: string[] = [],
+): HighlightResult {
+  const isMention = containsMention(message, nickname);
+  const matchedKeyword = containsKeyword(message, keywords);
+
+  return {
+    isMention,
+    isKeyword: matchedKeyword !== null,
+    matchedKeyword: matchedKeyword || undefined,
+  };
+}
+
+/**
+ * Escapes special regex characters in a string
+ */
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Parses a message with mention highlighting
+ * Returns parts with mentions marked separately from regular text
+ */
+export function parseMessageWithMentions(
+  text: string,
+  nickname: string,
+  keywords: string[] = [],
+): MessagePart[] {
+  if (!text) return [];
+
+  const parts: MessagePart[] = [];
+  const allHighlights = [nickname, ...keywords];
+
+  // First parse URLs
+  const urlParts = parseMessage(text);
+
+  // Then check each text part for mentions
+  for (const part of urlParts) {
+    if (part.type === "link") {
+      parts.push(part);
+      continue;
+    }
+
+    // Check if this text part contains any highlights
+    let remainingText = part.content;
+    let lastIndex = 0;
+    const matches: Array<{ start: number; end: number; word: string }> = [];
+
+    // Find all highlight matches
+    for (const highlight of allHighlights) {
+      const regex = new RegExp(`\\b${escapeRegex(highlight)}\\b`, "gi");
+      let match;
+      while ((match = regex.exec(part.content)) !== null) {
+        matches.push({
+          start: match.index,
+          end: match.index + match[0].length,
+          word: match[0],
+        });
+      }
+    }
+
+    // Sort matches by position
+    matches.sort((a, b) => a.start - b.start);
+
+    // Build parts from matches
+    for (const match of matches) {
+      // Add text before match
+      if (match.start > lastIndex) {
+        parts.push({
+          type: "text",
+          content: part.content.substring(lastIndex, match.start),
+        });
+      }
+
+      // Add mention
+      parts.push({
+        type: "mention",
+        content: match.word,
+      });
+
+      lastIndex = match.end;
+    }
+
+    // Add remaining text
+    if (lastIndex < part.content.length) {
+      parts.push({
+        type: "text",
+        content: part.content.substring(lastIndex),
+      });
+    }
+
+    // If no matches found, add the whole text
+    if (matches.length === 0) {
+      parts.push(part);
+    }
+  }
+
+  return parts;
 }
