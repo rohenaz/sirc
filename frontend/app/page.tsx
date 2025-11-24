@@ -722,6 +722,11 @@ function UserList({ serverId, channel }: UserListProps) {
         const modePrefix = user.match(/^[@+%&~!]/)?.[0] || '';
         const nickname = modePrefix ? user.slice(1) : user;
 
+        // Debug logging
+        if (i < 5) {
+          console.log(`[UserList] User ${i}: "${user}" -> prefix:"${modePrefix}" nick:"${nickname}"`);
+        }
+
         // Color coding for different modes
         const modeColor = {
           '@': 'text-yellow-500',  // Op

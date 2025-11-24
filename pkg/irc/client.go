@@ -29,6 +29,16 @@ func stripIRCFormatting(text string) string {
 	return text
 }
 
+// getChannelNames returns a list of channel names (for debugging)
+// NOTE: Caller must hold c.mu lock
+func (c *Client) getChannelNames() []string {
+	names := make([]string, 0, len(c.Channels))
+	for name := range c.Channels {
+		names = append(names, name)
+	}
+	return names
+}
+
 // NewClient creates a new IRC client
 func NewClient(server *Server) *Client {
 	return &Client{
@@ -372,13 +382,17 @@ func (c *Client) handleMessage(line string) {
 	// Handle NAMES list (RPL_NAMREPLY = 353)
 	if len(parts) >= 5 && parts[1] == "353" {
 		// :server 353 nick = #channel :user1 user2 user3
+		log.Printf("[IRC] 353 NAMES: parsing message with %d parts", len(parts))
+
 		channelIdx := -1
 		for i, part := range parts {
 			if strings.HasPrefix(part, "#") {
 				channelIdx = i
+				log.Printf("[IRC] 353 NAMES: found channel at index %d: %s", i, part)
 				break
 			}
 		}
+
 		if channelIdx > 0 && channelIdx < len(parts)-1 {
 			channel := parts[channelIdx]
 			// Users start after the channel name and :
@@ -386,8 +400,12 @@ func (c *Client) handleMessage(line string) {
 			userList = strings.TrimPrefix(userList, ":")
 			users := strings.Fields(userList) // Use Fields to properly split and trim whitespace
 
+			log.Printf("[IRC] 353 NAMES: channel=%s, extracted %d users", channel, len(users))
+
 			c.mu.Lock()
-			if ch := c.Channels[channel]; ch != nil {
+			ch := c.Channels[channel]
+			if ch != nil {
+				log.Printf("[IRC] 353 NAMES: channel %s found in map, current UserList has %d entries", channel, len(ch.UserList))
 				// Keep mode prefixes (@, +, %, &, ~, !) for display
 				// Filter out empty entries
 				validNicks := make([]string, 0, len(users))
@@ -402,8 +420,12 @@ func (c *Client) handleMessage(line string) {
 				ch.UserList = append(ch.UserList, validNicks...)
 				ch.Users = len(ch.UserList)
 				log.Printf("[IRC] Channel %s: added %d users (total: %d)", channel, len(validNicks), ch.Users)
+			} else {
+				log.Printf("[IRC] 353 NAMES: WARNING - channel %s NOT FOUND in Channels map! Available channels: %v", channel, c.getChannelNames())
 			}
 			c.mu.Unlock()
+		} else {
+			log.Printf("[IRC] 353 NAMES: WARNING - channelIdx invalid: %d (parts: %d)", channelIdx, len(parts))
 		}
 		return
 	}
