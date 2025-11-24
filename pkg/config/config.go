@@ -64,10 +64,34 @@ type DownloadSettings struct {
 
 // SecuritySettings configures security behavior
 type SecuritySettings struct {
-	VerifyCertificates bool `json:"verifyCertificates"` // Verify SSL certificates (default: false for IRC)
-	AllowDCC           bool `json:"allowDCC"`           // Allow DCC connections
-	AllowCTCP          bool `json:"allowCTCP"`          // Allow CTCP requests
-	IgnoreList         []string `json:"ignoreList"`     // List of ignored nicknames/hosts
+	VerifyCertificates bool     `json:"verifyCertificates"` // Verify SSL certificates (default: false for IRC)
+	AllowDCC           bool     `json:"allowDCC"`           // Allow DCC connections
+	AllowCTCP          bool     `json:"allowCTCP"`          // Allow CTCP requests
+	IgnoreList         []string `json:"ignoreList"`         // List of ignored nicknames/hosts
+}
+
+// WalletSettings configures cryptocurrency wallet behavior
+type WalletSettings struct {
+	Enabled       bool   `json:"enabled"`       // Enable wallet features
+	DefaultCoin   string `json:"defaultCoin"`   // Default coin for commands (bsv, sol)
+	AutoLockMins  int    `json:"autoLockMins"`  // Auto-lock wallet after N minutes of inactivity
+	ShowPriceUSD  bool   `json:"showPriceUsd"`  // Show USD price alongside crypto amounts
+
+	// BSV Settings
+	BSVNetwork string `json:"bsvNetwork"` // "mainnet" or "testnet"
+	ARCURL     string `json:"arcUrl"`     // ARC API endpoint
+	ARCAPIKey  string `json:"arcApiKey"`  // ARC API key (stored encrypted)
+	WOCURL     string `json:"wocUrl"`     // WhatsOnChain API endpoint
+
+	// Solana Settings
+	SolanaNetwork string `json:"solanaNetwork"` // "mainnet-beta" or "devnet"
+	SolanaRPCURL  string `json:"solanaRpcUrl"`  // Custom RPC URL (optional)
+
+	// Transaction Limits
+	MaxTipBSV     string `json:"maxTipBsv"`     // Max tip amount in BSV (e.g., "0.01")
+	MaxTipSOL     string `json:"maxTipSol"`     // Max tip amount in SOL (e.g., "1.0")
+	DailyLimitBSV string `json:"dailyLimitBsv"` // Daily limit in BSV (e.g., "0.1")
+	DailyLimitSOL string `json:"dailyLimitSol"` // Daily limit in SOL (e.g., "10.0")
 }
 
 // Settings represents all application settings
@@ -78,6 +102,7 @@ type Settings struct {
 	Chat          ChatSettings         `json:"chat"`
 	Download      DownloadSettings     `json:"download"`
 	Security      SecuritySettings     `json:"security"`
+	Wallet        WalletSettings       `json:"wallet"`
 }
 
 // DefaultSettings returns settings with sensible defaults
@@ -136,6 +161,22 @@ func DefaultSettings() *Settings {
 			AllowDCC:           true,
 			AllowCTCP:          true,
 			IgnoreList:         []string{},
+		},
+		Wallet: WalletSettings{
+			Enabled:       false, // Disabled by default
+			DefaultCoin:   "bsv",
+			AutoLockMins:  5,
+			ShowPriceUSD:  true,
+			BSVNetwork:    "mainnet",
+			ARCURL:        "https://api.taal.com/arc",
+			ARCAPIKey:     "",
+			WOCURL:        "https://api.whatsonchain.com",
+			SolanaNetwork: "mainnet-beta",
+			SolanaRPCURL:  "",
+			MaxTipBSV:     "0.01",
+			MaxTipSOL:     "1.0",
+			DailyLimitBSV: "0.1",
+			DailyLimitSOL: "10.0",
 		},
 	}
 }

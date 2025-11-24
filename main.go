@@ -35,6 +35,14 @@ func main() {
 	downloadManager := download.NewManager(downloadPath, 3, nil) // Max 3 concurrent downloads
 	xdccService := services.NewXDCCService(ircService, downloadManager, nil)
 	settingsService := services.NewSettingsService()
+	walletService := services.NewWalletService()
+
+	// Initialize wallet service (non-blocking, logs errors)
+	go func() {
+		if err := walletService.Initialize(); err != nil {
+			log.Printf("Warning: wallet service initialization failed: %v", err)
+		}
+	}()
 
 	// Create the Wails application
 	app := application.New(application.Options{
@@ -44,6 +52,7 @@ func main() {
 			application.NewService(ircService),
 			application.NewService(xdccService),
 			application.NewService(settingsService),
+			application.NewService(walletService),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
