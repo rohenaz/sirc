@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import {
@@ -23,6 +23,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { MessageText } from "@/components/MessageText";
 import type { Server, Channel, Message } from "@/bindings/sirc/pkg/irc/models";
+import { checkHighlight } from "@/lib/message-parser";
+import {
+  requestNotificationPermission,
+  showMentionNotification,
+  showPrivateMessageNotification,
+  shouldNotify,
+} from "@/lib/notifications";
 
 // Dynamic import for components that use Wails bindings
 const AddServerDialog = dynamic(() => import("@/components/AddServerDialog").then(m => ({ default: m.AddServerDialog })), { ssr: false });
@@ -575,6 +582,22 @@ function ChatMessages({ serverId, channel }: ChatMessagesProps) {
   const [messages, setMessages] = useState<(Message | null)[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentNick, setCurrentNick] = useState<string>("");
+  const [previousMessageCount, setPreviousMessageCount] = useState(0);
+  const [notificationPermissionRequested, setNotificationPermissionRequested] = useState(false);
+
+  // Request notification permission on mount
+  useEffect(() => {
+    if (!notificationPermissionRequested) {
+      requestNotificationPermission().then((granted) => {
+        if (granted) {
+          console.log("[Notifications] Permission granted");
+        } else {
+          console.log("[Notifications] Permission denied or not supported");
+        }
+      });
+      setNotificationPermissionRequested(true);
+    }
+  }, [notificationPermissionRequested]);
 
   // Fetch current user's nickname
   useEffect(() => {
@@ -597,7 +620,7 @@ function ChatMessages({ serverId, channel }: ChatMessagesProps) {
   }, [serverId, GetCurrentNick]);
 
   // Fetch messages from backend
-  const fetchMessages = async () => {
+  const fetchMessages = useCallback(async () => {
     if (!serverId || !channel || !GetMessages) {
       setMessages([]);
       return;
@@ -605,20 +628,50 @@ function ChatMessages({ serverId, channel }: ChatMessagesProps) {
 
     try {
       const msgs = await GetMessages(serverId, channel);
+
+      // Check for new messages and trigger notifications
+      if (currentNick && msgs.length > previousMessageCount) {
+        // Only check the new messages (messages after previousMessageCount)
+        const newMessages = msgs.slice(previousMessageCount);
+
+        for (const msg of newMessages) {
+          if (!msg || msg.from === currentNick) continue; // Skip own messages
+
+          // Check if message contains a mention or is a private message
+          const isPM = !channel.startsWith("#");
+          const highlight = checkHighlight(msg.text, currentNick, []);
+
+          // Determine if we should notify
+          if (shouldNotify(highlight.isMention || isPM, highlight.isKeyword)) {
+            if (isPM) {
+              showPrivateMessageNotification(msg.from, msg.text);
+            } else if (highlight.isMention) {
+              showMentionNotification(msg.from, channel, msg.text);
+            }
+          }
+        }
+      }
+
+      setPreviousMessageCount(msgs.length);
       setMessages(msgs);
     } catch (error) {
       // Channel might not be joined yet or no messages, that's ok
       console.debug("Failed to fetch messages:", error);
       setMessages([]);
     }
-  };
+  }, [serverId, channel, GetMessages, currentNick, previousMessageCount]);
+
+  // Reset message count when channel changes
+  useEffect(() => {
+    setPreviousMessageCount(0);
+  }, [serverId, channel]);
 
   // Initial load
   useEffect(() => {
     if (!GetMessages) return;
     setLoading(true);
     fetchMessages().finally(() => setLoading(false));
-  }, [serverId, channel, GetMessages]);
+  }, [GetMessages, fetchMessages]);
 
   // Poll for new messages every 1 second
   useEffect(() => {
@@ -629,7 +682,7 @@ function ChatMessages({ serverId, channel }: ChatMessagesProps) {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [serverId, channel, GetMessages]);
+  }, [serverId, channel, GetMessages, fetchMessages]);
 
   if (loading) {
     return (
