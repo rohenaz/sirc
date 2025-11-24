@@ -7,15 +7,17 @@ import (
 
 // Server represents an IRC server configuration
 type Server struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Host     string `json:"host"`
-	Port     int    `json:"port"`
-	SSL      bool   `json:"ssl"`
-	Nick     string `json:"nick"`
-	User     string `json:"user"`
-	RealName string `json:"realName"`
-	Password string `json:"password,omitempty"`
+	ID               string `json:"id"`
+	Name             string `json:"name"`
+	Host             string `json:"host"`
+	Port             int    `json:"port"`
+	SSL              bool   `json:"ssl"`
+	Nick             string `json:"nick"`
+	User             string `json:"user"`
+	RealName         string `json:"realName"`
+	Password         string `json:"password,omitempty"`
+	AutoReconnect    bool   `json:"autoReconnect"`    // Enable automatic reconnection on disconnect
+	NickServPassword string `json:"nickServPassword,omitempty"` // Password for NickServ authentication
 }
 
 // Channel represents an IRC channel
@@ -56,18 +58,38 @@ type LogEntry struct {
 	Type      string    `json:"type"` // "info", "error", "protocol"
 }
 
+// WhoisInfo represents WHOIS information about a user
+type WhoisInfo struct {
+	Nick       string   `json:"nick"`
+	Username   string   `json:"username"`
+	Host       string   `json:"host"`
+	RealName   string   `json:"realName"`
+	Server     string   `json:"server"`
+	ServerInfo string   `json:"serverInfo"`
+	Channels   []string `json:"channels"`
+	Account    string   `json:"account"`
+	IsOperator bool     `json:"isOperator"`
+	IdleTime   int      `json:"idleTime"`   // seconds
+	SignOnTime int64    `json:"signOnTime"` // unix timestamp
+}
+
 // Client represents an IRC client connection
 type Client struct {
-	Server         *Server
-	State          ConnectionState
-	Channels       map[string]*Channel // Joined channels (Joined=true)
-	ChannelList    []*Channel          // All channels from LIST command (Joined=false)
-	Logs           []*LogEntry
-	conn           interface{} // net.Conn
-	mu             sync.RWMutex
-	listMu         sync.Mutex // Separate mutex for ChannelList and listInProgress
-	stopCh         chan struct{}
-	maxMessages    int  // Maximum messages to store per channel
-	maxLogs        int  // Maximum log entries to store
-	listInProgress bool // Track if LIST command is in progress
+	Server          *Server
+	State           ConnectionState
+	Channels        map[string]*Channel // Joined channels (Joined=true)
+	ChannelList     []*Channel          // All channels from LIST command (Joined=false)
+	Logs            []*LogEntry
+	conn            interface{} // net.Conn
+	mu              sync.RWMutex
+	listMu          sync.Mutex // Separate mutex for ChannelList and listInProgress
+	stopCh          chan struct{}
+	maxMessages     int  // Maximum messages to store per channel
+	maxLogs         int  // Maximum log entries to store
+	listInProgress  bool // Track if LIST command is in progress
+	reconnectCount  int  // Number of reconnect attempts
+	reconnecting    bool // Currently attempting reconnect
+	joinedChannels  []string // List of channels to rejoin on reconnect
+	whoisData       map[string]*WhoisInfo // WHOIS data being collected
+	whoisMu         sync.Mutex            // Mutex for WHOIS data
 }

@@ -71,6 +71,13 @@ export function GetConnectionState(serverID: string): $CancellablePromise<string
 }
 
 /**
+ * GetCurrentNick returns the current nickname for a server
+ */
+export function GetCurrentNick(serverID: string): $CancellablePromise<string> {
+    return $Call.ByID(1234567890, serverID);
+}
+
+/**
  * GetLogs returns IRC protocol logs for a server
  */
 export function GetLogs(serverID: string): $CancellablePromise<(irc$0.LogEntry | null)[]> {

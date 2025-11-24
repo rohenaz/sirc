@@ -353,3 +353,16 @@ func (s *IRCService) IsChannelListInProgress(serverID string) (bool, error) {
 func (s *IRCService) GetServerTemplates() []irc.ServerTemplate {
 	return irc.GetServerTemplates()
 }
+
+// GetCurrentNick returns the current nickname for a server
+func (s *IRCService) GetCurrentNick(serverID string) (string, error) {
+	s.mu.RLock()
+	server, exists := s.servers[serverID]
+	s.mu.RUnlock()
+
+	if !exists {
+		return "", fmt.Errorf("server not found: %s", serverID)
+	}
+
+	return server.Nick, nil
+}

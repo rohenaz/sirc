@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import {
@@ -21,12 +21,23 @@ import {
   ContextMenuSeparator,
 } from "@/components/ui/context-menu";
 import { Button } from "@/components/ui/button";
+import { MessageText } from "@/components/MessageText";
 import type { Server, Channel, Message } from "@/bindings/sirc/pkg/irc/models";
+import { checkHighlight } from "@/lib/message-parser";
+import {
+  requestNotificationPermission,
+  showMentionNotification,
+  showPrivateMessageNotification,
+  shouldNotify,
+} from "@/lib/notifications";
+import { useKeyboardShortcuts, type KeyboardShortcut } from "@/lib/keyboard-shortcuts";
 
 // Dynamic import for components that use Wails bindings
 const AddServerDialog = dynamic(() => import("@/components/AddServerDialog").then(m => ({ default: m.AddServerDialog })), { ssr: false });
 const JoinChannelDialog = dynamic(() => import("@/components/JoinChannelDialog").then(m => ({ default: m.JoinChannelDialog })), { ssr: false });
 const ChannelBrowserDialog = dynamic(() => import("@/components/ChannelBrowserDialog").then(m => ({ default: m.ChannelBrowserDialog })), { ssr: false });
+const KeyboardShortcutsDialog = dynamic(() => import("@/components/KeyboardShortcutsDialog").then(m => ({ default: m.KeyboardShortcutsDialog })), { ssr: false });
+const SettingsDialog = dynamic(() => import("@/components/SettingsDialog").then(m => ({ default: m.SettingsDialog })), { ssr: false });
 
 // Dynamically import Wails bindings (client-side only)
 type IRCServiceBindings = typeof import("@/bindings/sirc/pkg/services/ircservice");
@@ -41,11 +52,14 @@ let JoinChannel: IRCServiceBindings["JoinChannel"];
 let PartChannel: IRCServiceBindings["PartChannel"];
 let RemoveServer: IRCServiceBindings["RemoveServer"];
 let GetLogs: IRCServiceBindings["GetLogs"];
+let GetCurrentNick: IRCServiceBindings["GetCurrentNick"];
 
 export default function Home() {
   const [showAddServer, setShowAddServer] = useState(false);
   const [showJoinChannel, setShowJoinChannel] = useState(false);
   const [showBrowseChannels, setShowBrowseChannels] = useState(false);
+  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [servers, setServers] = useState<(Server | null)[]>([]);
   const [activeServerId, setActiveServerId] = useState<string>("");
   const [activeChannel, setActiveChannel] = useState<string>("");
@@ -66,6 +80,7 @@ export default function Home() {
       RemoveServer = module.RemoveServer;
       GetLogs = module.GetLogs;
       JoinChannel = module.JoinChannel;
+      GetCurrentNick = module.GetCurrentNick;
       setBindingsLoaded(true);
     });
   }, []);
@@ -89,6 +104,147 @@ export default function Home() {
     }
   }, [bindingsLoaded]);
 
+  // Listen for native menu events
+  useEffect(() => {
+    const handleOpenSettings = () => setShowSettings(true);
+    const handleOpenKeyboardShortcuts = () => setShowKeyboardShortcuts(true);
+
+    // @ts-ignore - Wails events not typed
+    if (typeof window !== "undefined" && window.wails) {
+      // @ts-ignore
+      window.wails.Events.On("open-settings", handleOpenSettings);
+      // @ts-ignore
+      window.wails.Events.On("open-keyboard-shortcuts", handleOpenKeyboardShortcuts);
+
+      return () => {
+        // @ts-ignore
+        window.wails.Events.Off("open-settings");
+        // @ts-ignore
+        window.wails.Events.Off("open-keyboard-shortcuts");
+      };
+    }
+  }, []);
+
+  // Helper to get all channels across all servers
+  const getAllChannels = useCallback(() => {
+    const allChannels: Array<{ serverId: string; channel: string }> = [];
+    for (const server of servers) {
+      if (!server) continue;
+      // This would need GetChannels to be called, but we'll implement a simpler version
+      // For now, just track the active channel
+    }
+    return allChannels;
+  }, [servers]);
+
+  // Helper to switch to next/previous channel
+  const switchChannel = useCallback((direction: "next" | "prev") => {
+    if (!activeServerId) return;
+
+    const activeServer = servers.find((s) => s?.id === activeServerId);
+    if (!activeServer) return;
+
+    // This is a simplified version - in a real implementation we'd need to
+    // fetch the channels and switch between them
+    console.log(`[Keyboard] Switch channel ${direction}`);
+  }, [activeServerId, servers]);
+
+  // Helper to part current channel
+  const partCurrentChannel = useCallback(async () => {
+    if (!activeServerId || !activeChannel || !PartChannel) return;
+
+    try {
+      await PartChannel(activeServerId, activeChannel);
+      setActiveChannel("");
+    } catch (error) {
+      console.error("Failed to part channel:", error);
+    }
+  }, [activeServerId, activeChannel]);
+
+  // Define keyboard shortcuts
+  const shortcuts: KeyboardShortcut[] = [
+    // Navigation
+    {
+      key: "ArrowUp",
+      ctrl: true,
+      description: "Switch to previous channel",
+      category: "Navigation",
+      handler: () => switchChannel("prev"),
+    },
+    {
+      key: "ArrowDown",
+      ctrl: true,
+      description: "Switch to next channel",
+      category: "Navigation",
+      handler: () => switchChannel("next"),
+    },
+
+    // Actions
+    {
+      key: "t",
+      ctrl: true,
+      description: "Add new server",
+      category: "Actions",
+      handler: () => setShowAddServer(true),
+    },
+    {
+      key: "j",
+      ctrl: true,
+      description: "Join channel",
+      category: "Actions",
+      handler: () => {
+        if (activeServerId) {
+          setShowJoinChannel(true);
+        }
+      },
+    },
+    {
+      key: "b",
+      ctrl: true,
+      description: "Browse channels",
+      category: "Actions",
+      handler: () => {
+        if (activeServerId) {
+          setShowBrowseChannels(true);
+        }
+      },
+    },
+    {
+      key: "w",
+      ctrl: true,
+      description: "Part current channel",
+      category: "Actions",
+      handler: partCurrentChannel,
+    },
+
+    // View
+    {
+      key: "l",
+      ctrl: true,
+      description: "Toggle IRC log",
+      category: "View",
+      handler: () => setIrcLogCollapsed((prev) => !prev),
+    },
+
+    // Help
+    {
+      key: "/",
+      ctrl: true,
+      description: "Show keyboard shortcuts",
+      category: "Help",
+      handler: () => setShowKeyboardShortcuts((prev) => !prev),
+    },
+    {
+      key: ",",
+      ctrl: true,
+      description: "Open settings",
+      category: "Help",
+      handler: () => setShowSettings(true),
+    },
+  ];
+
+  // Register keyboard shortcuts
+  useKeyboardShortcuts(shortcuts);
+
   const activeServer = servers.find((s) => s?.id === activeServerId);
 
   return (
@@ -97,6 +253,15 @@ export default function Home() {
         open={showAddServer}
         onOpenChange={setShowAddServer}
         onServerAdded={loadServers}
+      />
+      <KeyboardShortcutsDialog
+        open={showKeyboardShortcuts}
+        onOpenChange={setShowKeyboardShortcuts}
+        shortcuts={shortcuts}
+      />
+      <SettingsDialog
+        open={showSettings}
+        onOpenChange={setShowSettings}
       />
       {activeServer && (
         <>
@@ -571,9 +736,46 @@ interface ChatMessagesProps {
 function ChatMessages({ serverId, channel }: ChatMessagesProps) {
   const [messages, setMessages] = useState<(Message | null)[]>([]);
   const [loading, setLoading] = useState(false);
+  const [currentNick, setCurrentNick] = useState<string>("");
+  const [previousMessageCount, setPreviousMessageCount] = useState(0);
+  const [notificationPermissionRequested, setNotificationPermissionRequested] = useState(false);
+
+  // Request notification permission on mount
+  useEffect(() => {
+    if (!notificationPermissionRequested) {
+      requestNotificationPermission().then((granted) => {
+        if (granted) {
+          console.log("[Notifications] Permission granted");
+        } else {
+          console.log("[Notifications] Permission denied or not supported");
+        }
+      });
+      setNotificationPermissionRequested(true);
+    }
+  }, [notificationPermissionRequested]);
+
+  // Fetch current user's nickname
+  useEffect(() => {
+    if (!serverId || !GetCurrentNick) {
+      setCurrentNick("");
+      return;
+    }
+
+    const fetchNick = async () => {
+      try {
+        const nick = await GetCurrentNick(serverId);
+        setCurrentNick(nick);
+      } catch (error) {
+        console.debug("Failed to fetch current nick:", error);
+        setCurrentNick("");
+      }
+    };
+
+    fetchNick();
+  }, [serverId, GetCurrentNick]);
 
   // Fetch messages from backend
-  const fetchMessages = async () => {
+  const fetchMessages = useCallback(async () => {
     if (!serverId || !channel || !GetMessages) {
       setMessages([]);
       return;
@@ -581,20 +783,50 @@ function ChatMessages({ serverId, channel }: ChatMessagesProps) {
 
     try {
       const msgs = await GetMessages(serverId, channel);
+
+      // Check for new messages and trigger notifications
+      if (currentNick && msgs.length > previousMessageCount) {
+        // Only check the new messages (messages after previousMessageCount)
+        const newMessages = msgs.slice(previousMessageCount);
+
+        for (const msg of newMessages) {
+          if (!msg || msg.from === currentNick) continue; // Skip own messages
+
+          // Check if message contains a mention or is a private message
+          const isPM = !channel.startsWith("#");
+          const highlight = checkHighlight(msg.text, currentNick, []);
+
+          // Determine if we should notify
+          if (shouldNotify(highlight.isMention || isPM, highlight.isKeyword)) {
+            if (isPM) {
+              showPrivateMessageNotification(msg.from, msg.text);
+            } else if (highlight.isMention) {
+              showMentionNotification(msg.from, channel, msg.text);
+            }
+          }
+        }
+      }
+
+      setPreviousMessageCount(msgs.length);
       setMessages(msgs);
     } catch (error) {
       // Channel might not be joined yet or no messages, that's ok
       console.debug("Failed to fetch messages:", error);
       setMessages([]);
     }
-  };
+  }, [serverId, channel, GetMessages, currentNick, previousMessageCount]);
+
+  // Reset message count when channel changes
+  useEffect(() => {
+    setPreviousMessageCount(0);
+  }, [serverId, channel]);
 
   // Initial load
   useEffect(() => {
     if (!GetMessages) return;
     setLoading(true);
     fetchMessages().finally(() => setLoading(false));
-  }, [serverId, channel, GetMessages]);
+  }, [GetMessages, fetchMessages]);
 
   // Poll for new messages every 1 second
   useEffect(() => {
@@ -605,7 +837,7 @@ function ChatMessages({ serverId, channel }: ChatMessagesProps) {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [serverId, channel, GetMessages]);
+  }, [serverId, channel, GetMessages, fetchMessages]);
 
   if (loading) {
     return (
@@ -646,7 +878,11 @@ function ChatMessages({ serverId, channel }: ChatMessagesProps) {
           <div key={idx} className="px-1 py-0.5 hover:bg-accent/50 rounded text-[11px]">
             <span className="text-[10px] text-muted-foreground">{time}</span>
             <span className="mx-1.5 font-medium text-primary">{msg.from}:</span>
-            <span className="text-foreground">{msg.text}</span>
+            <MessageText
+              text={msg.text}
+              className="text-foreground"
+              currentNick={currentNick}
+            />
           </div>
         );
       })}
