@@ -1,15 +1,14 @@
 package wallet
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 
+	sdkaesgcm "github.com/bsv-blockchain/go-sdk/primitives/aesgcm"
+	sdkhash "github.com/bsv-blockchain/go-sdk/primitives/hash"
 	"golang.org/x/crypto/argon2"
 )
 
@@ -146,95 +145,81 @@ func (s *FileTxStorage) save() error {
 	return os.WriteFile(s.filePath, data, 0600)
 }
 
-// Encryption utilities
+// Encryption utilities using BSV go-sdk primitives
+
+const (
+	saltSize  = 16 // Salt for key derivation
+	nonceSize = 12 // Standard GCM nonce size
+	tagSize   = 16 // GCM authentication tag size
+)
 
 // DeriveKey derives an AES-256 key from a password using Argon2id
+// Note: go-sdk doesn't provide a KDF, so we use argon2 from x/crypto
 func DeriveKey(password string, salt []byte) []byte {
 	return argon2.IDKey([]byte(password), salt, 1, 64*1024, 4, 32)
 }
 
-// Encrypt encrypts data using AES-256-GCM
+// Encrypt encrypts data using AES-256-GCM via go-sdk
+// Format: salt (16) + nonce (12) + ciphertext + tag (16)
 func Encrypt(plaintext []byte, password string) ([]byte, error) {
-	// Generate random salt
-	salt := make([]byte, 16)
+	// Generate random salt for key derivation
+	salt := make([]byte, saltSize)
 	if _, err := rand.Read(salt); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to generate salt: %w", err)
 	}
 
 	// Derive key from password
 	key := DeriveKey(password, salt)
 
-	// Create cipher
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-
-	// Generate nonce
-	nonce := make([]byte, gcm.NonceSize())
+	// Generate random nonce/IV
+	nonce := make([]byte, nonceSize)
 	if _, err := rand.Read(nonce); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to generate nonce: %w", err)
 	}
 
-	// Encrypt
-	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
+	// Encrypt using go-sdk's AES-GCM
+	ciphertext, tag, err := sdkaesgcm.AESGCMEncrypt(plaintext, key, nonce, nil)
+	if err != nil {
+		return nil, fmt.Errorf("encryption failed: %w", err)
+	}
 
-	// Prepend salt to ciphertext
-	result := make([]byte, len(salt)+len(ciphertext))
-	copy(result, salt)
-	copy(result[len(salt):], ciphertext)
+	// Combine: salt + nonce + ciphertext + tag
+	result := make([]byte, saltSize+nonceSize+len(ciphertext)+len(tag))
+	copy(result[0:], salt)
+	copy(result[saltSize:], nonce)
+	copy(result[saltSize+nonceSize:], ciphertext)
+	copy(result[saltSize+nonceSize+len(ciphertext):], tag)
 
 	return result, nil
 }
 
-// Decrypt decrypts data using AES-256-GCM
-func Decrypt(ciphertext []byte, password string) ([]byte, error) {
-	if len(ciphertext) < 16 {
-		return nil, fmt.Errorf("ciphertext too short")
+// Decrypt decrypts data using AES-256-GCM via go-sdk
+// Expected format: salt (16) + nonce (12) + ciphertext + tag (16)
+func Decrypt(data []byte, password string) ([]byte, error) {
+	minLen := saltSize + nonceSize + tagSize
+	if len(data) < minLen {
+		return nil, fmt.Errorf("ciphertext too short: need at least %d bytes", minLen)
 	}
 
-	// Extract salt
-	salt := ciphertext[:16]
-	ciphertext = ciphertext[16:]
+	// Extract components
+	salt := data[:saltSize]
+	nonce := data[saltSize : saltSize+nonceSize]
+	ciphertext := data[saltSize+nonceSize : len(data)-tagSize]
+	tag := data[len(data)-tagSize:]
 
 	// Derive key from password
 	key := DeriveKey(password, salt)
 
-	// Create cipher
-	block, err := aes.NewCipher(key)
+	// Decrypt using go-sdk's AES-GCM
+	plaintext, err := sdkaesgcm.AESGCMDecrypt(ciphertext, key, nonce, nil, tag)
 	if err != nil {
-		return nil, err
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(ciphertext) < gcm.NonceSize() {
-		return nil, fmt.Errorf("ciphertext too short")
-	}
-
-	// Extract nonce
-	nonce := ciphertext[:gcm.NonceSize()]
-	ciphertext = ciphertext[gcm.NonceSize():]
-
-	// Decrypt
-	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
-	if err != nil {
-		return nil, fmt.Errorf("decryption failed: %w", err)
+		return nil, fmt.Errorf("decryption failed (wrong password?): %w", err)
 	}
 
 	return plaintext, nil
 }
 
-// HashPassword creates a hash of the password for verification
+// HashPassword creates a SHA256 hash of the password using go-sdk
 func HashPassword(password string) []byte {
-	hash := sha256.Sum256([]byte(password))
-	return hash[:]
+	return sdkhash.Sha256([]byte(password))
 }

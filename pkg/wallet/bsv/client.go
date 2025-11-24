@@ -3,10 +3,12 @@ package bsv
 import (
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"sirc/pkg/wallet"
 	"sync"
 	"time"
+
+	sdkec "github.com/bsv-blockchain/go-sdk/primitives/ec"
+	sdkscript "github.com/bsv-blockchain/go-sdk/script"
 )
 
 // Client implements the ChainWallet interface for BSV
@@ -65,14 +67,36 @@ func (c *Client) Initialize(password string) error {
 		return fmt.Errorf("wallet already initialized")
 	}
 
-	// TODO: Use go-sdk to generate keys
-	// For now, create placeholder data
+	// Generate new private key using go-sdk
+	privKey, err := sdkec.NewPrivateKey()
+	if err != nil {
+		return fmt.Errorf("failed to generate private key: %w", err)
+	}
+
+	// Get WIF encoding (mainnet or testnet prefix)
+	var wif string
+	if c.network == "mainnet" {
+		wif = privKey.Wif()
+	} else {
+		// Testnet WIF prefix is 0xef
+		wif = privKey.WifPrefix(0xef)
+	}
+
+	// Derive address from public key using go-sdk
+	pubKey := privKey.PubKey()
+	isMainnet := c.network == "mainnet"
+	addr, err := sdkscript.NewAddressFromPublicKey(pubKey, isMainnet)
+	if err != nil {
+		return fmt.Errorf("failed to derive address: %w", err)
+	}
+
+	// Prepare key data for storage
 	keyData := struct {
 		WIF     string `json:"wif"`
 		Address string `json:"address"`
 	}{
-		WIF:     "placeholder_wif_" + fmt.Sprintf("%d", time.Now().UnixNano()),
-		Address: "placeholder_address",
+		WIF:     wif,
+		Address: addr.AddressString,
 	}
 
 	data, err := json.Marshal(keyData)
@@ -242,28 +266,23 @@ func (c *Client) Send(toAddress string, amount string, memo string) (*wallet.Tra
 	return nil, fmt.Errorf("send not yet implemented - requires go-sdk integration")
 }
 
-// ValidateAddress checks if an address is valid for BSV
+// ValidateAddress checks if an address is valid for BSV using go-sdk
 func (c *Client) ValidateAddress(address string) bool {
-	// Basic BSV address validation
-	// Mainnet addresses start with 1 or 3
-	// Testnet addresses start with m, n, or 2
-
-	if len(address) < 26 || len(address) > 35 {
+	// Use go-sdk to parse and validate the address
+	// This handles base58 decoding, checksum verification, and prefix checking
+	addr, err := sdkscript.NewAddressFromString(address)
+	if err != nil {
 		return false
 	}
 
-	// Check for valid base58 characters
-	base58Regex := regexp.MustCompile(`^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]+$`)
-	if !base58Regex.MatchString(address) {
-		return false
-	}
-
-	// Check prefix based on network
+	// Verify network matches
+	// Mainnet prefix is 0x00, testnet prefix is 0x6f
 	if c.network == "mainnet" {
-		return address[0] == '1' || address[0] == '3'
-	} else {
-		return address[0] == 'm' || address[0] == 'n' || address[0] == '2'
+		// Mainnet addresses start with 1
+		return len(addr.AddressString) > 0 && addr.AddressString[0] == '1'
 	}
+	// Testnet addresses start with m or n
+	return len(addr.AddressString) > 0 && (addr.AddressString[0] == 'm' || addr.AddressString[0] == 'n')
 }
 
 // GetNetwork returns the current network
