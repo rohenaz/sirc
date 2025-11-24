@@ -399,6 +399,8 @@ tasks:
     cmds:
       # For a complete list of options, run `wails3 generate bindings -help`
       - wails3 generate bindings -f '{{.BUILD_FLAGS}}' -ts
+      # Fix import paths: Remove .js extensions from TypeScript imports
+      - find frontend/bindings -name "*.ts" -type f -exec sed -i '' 's|from "\([^"]*\)\.js"|from "\1"|g' {} +
 
   go:mod:tidy:
     summary: Runs `go mod tidy`

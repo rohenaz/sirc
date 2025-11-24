@@ -4,34 +4,44 @@ import (
 	"embed"
 	_ "embed"
 	"log"
-	"time"
+	"os"
+	"path/filepath"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"sirc/pkg/download"
+	"sirc/pkg/services"
 )
 
 // Wails uses Go's `embed` package to embed the frontend files into the binary.
-// Any files in the frontend/dist folder will be embedded into the binary and
+// Any files in the frontend/out folder will be embedded into the binary and
 // made available to the frontend.
 // See https://pkg.go.dev/embed for more information.
 
-//go:embed frontend/out/*
+//go:embed all:frontend/out
 var assets embed.FS
 
 // main function serves as the application's entry point. It initializes the application, creates a window,
-// and starts a goroutine that emits a time-based event every second. It subsequently runs the application and
-// logs any error that might occur.
+// and starts the IRC/XDCC services.
 func main() {
+	// Get user's home directory for downloads
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatal(err)
+	}
+	downloadPath := filepath.Join(homeDir, "Downloads", "SIRC")
 
-	// Create a new Wails application by providing the necessary options.
-	// Variables 'Name' and 'Description' are for application metadata.
-	// 'Assets' configures the asset server with the 'FS' variable pointing to the frontend files.
-	// 'Bind' is a list of Go struct instances. The frontend has access to the methods of these instances.
-	// 'Mac' options tailor the application when running an macOS.
+	// Initialize services
+	ircService := services.NewIRCService()
+	downloadManager := download.NewManager(downloadPath, 3, nil) // Max 3 concurrent downloads
+	xdccService := services.NewXDCCService(ircService, downloadManager, nil)
+
+	// Create the Wails application
 	app := application.New(application.Options{
 		Name:        "wails3-nextjs",
-		Description: "A demo of using raw HTML & CSS",
+		Description: "IRC client with XDCC downloads",
 		Services: []application.Service{
-			application.NewService(&GreetService{}),
+			application.NewService(ircService),
+			application.NewService(xdccService),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -41,39 +51,22 @@ func main() {
 		},
 	})
 
-	// Create a new window with the necessary options.
-	// 'Title' is the title of the window.
-	// 'Mac' options tailor the window when running on macOS.
-	// 'BackgroundColour' is the background colour of the window.
-	// 'URL' is the URL that will be loaded into the webview.
-	app.NewWebviewWindowWithOptions(application.WebviewWindowOptions{
-		Title: "Window 1",
+	// Create the main window
+	app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Title:  "wails3-nextjs",
+		Width:  1400,
+		Height: 900,
 		Mac: application.MacWindow{
 			InvisibleTitleBarHeight: 50,
 			Backdrop:                application.MacBackdropTranslucent,
 			TitleBar:                application.MacTitleBarHiddenInset,
 		},
-		BackgroundColour: application.NewRGB(27, 38, 54),
+		BackgroundColour: application.NewRGB(17, 24, 39),
 		URL:              "/",
 	})
 
-	// Create a goroutine that emits an event containing the current time every second.
-	// The frontend can listen to this event and update the UI accordingly.
-	go func() {
-		for {
-			now := time.Now().Format(time.RFC1123)
-			app.Events.Emit(&application.WailsEvent{
-				Name: "time",
-				Data: now,
-			})
-			time.Sleep(time.Second)
-		}
-	}()
-
-	// Run the application. This blocks until the application has been exited.
-	err := app.Run()
-
-	// If an error occurred while running the application, log it and exit.
+	// Run the application
+	err = app.Run()
 	if err != nil {
 		log.Fatal(err)
 	}
