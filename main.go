@@ -34,14 +34,16 @@ func main() {
 	ircService := services.NewIRCService()
 	downloadManager := download.NewManager(downloadPath, 3, nil) // Max 3 concurrent downloads
 	xdccService := services.NewXDCCService(ircService, downloadManager, nil)
+	settingsService := services.NewSettingsService()
 
 	// Create the Wails application
 	app := application.New(application.Options{
-		Name:        "wails3-nextjs",
+		Name:        "SIRC",
 		Description: "IRC client with XDCC downloads",
 		Services: []application.Service{
 			application.NewService(ircService),
 			application.NewService(xdccService),
+			application.NewService(settingsService),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -50,6 +52,62 @@ func main() {
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
 	})
+
+	// Create application menu
+	appMenu := app.NewMenu()
+
+	// File menu
+	fileMenu := appMenu.AddSubmenu("File")
+	fileMenu.Add("Settings...").SetAccelerator("CmdOrCtrl+,").OnClick(func(ctx *application.Context) {
+		// Emit event to open settings dialog
+		app.EmitEvent("open-settings")
+	})
+	fileMenu.AddSeparator()
+	fileMenu.Add("Quit").SetAccelerator("CmdOrCtrl+Q").OnClick(func(ctx *application.Context) {
+		app.Quit()
+	})
+
+	// Edit menu
+	editMenu := appMenu.AddSubmenu("Edit")
+	editMenu.Add("Cut").SetAccelerator("CmdOrCtrl+X").OnClick(func(ctx *application.Context) {
+		app.EmitEvent("edit-cut")
+	})
+	editMenu.Add("Copy").SetAccelerator("CmdOrCtrl+C").OnClick(func(ctx *application.Context) {
+		app.EmitEvent("edit-copy")
+	})
+	editMenu.Add("Paste").SetAccelerator("CmdOrCtrl+V").OnClick(func(ctx *application.Context) {
+		app.EmitEvent("edit-paste")
+	})
+
+	// View menu
+	viewMenu := appMenu.AddSubmenu("View")
+	viewMenu.Add("Reload").SetAccelerator("CmdOrCtrl+R").OnClick(func(ctx *application.Context) {
+		app.EmitEvent("view-reload")
+	})
+	viewMenu.Add("Toggle Developer Tools").SetAccelerator("F12").OnClick(func(ctx *application.Context) {
+		app.EmitEvent("view-devtools")
+	})
+
+	// Window menu
+	windowMenu := appMenu.AddSubmenu("Window")
+	windowMenu.Add("Minimize").SetAccelerator("CmdOrCtrl+M").OnClick(func(ctx *application.Context) {
+		app.EmitEvent("window-minimize")
+	})
+	windowMenu.Add("Zoom").OnClick(func(ctx *application.Context) {
+		app.EmitEvent("window-zoom")
+	})
+
+	// Help menu
+	helpMenu := appMenu.AddSubmenu("Help")
+	helpMenu.Add("Keyboard Shortcuts").SetAccelerator("CmdOrCtrl+/").OnClick(func(ctx *application.Context) {
+		app.EmitEvent("open-keyboard-shortcuts")
+	})
+	helpMenu.Add("About SIRC").OnClick(func(ctx *application.Context) {
+		app.EmitEvent("open-about")
+	})
+
+	// Set the menu
+	app.SetMenu(appMenu)
 
 	// Create the main window
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
