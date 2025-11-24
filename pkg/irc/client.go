@@ -51,6 +51,7 @@ func NewClient(server *Server) *Client {
 		maxMessages:    500, // Store last 500 messages per channel
 		maxLogs:        200, // Store last 200 log entries
 		listInProgress: false,
+		whoisData:      make(map[string]*WhoisInfo),
 	}
 }
 
@@ -215,6 +216,35 @@ func (c *Client) ListChannels() error {
 	log.Printf("[IRC] Requesting channel list...")
 	c.addLog("info", "Requesting channel list...", "info")
 	return c.sendRaw("LIST")
+}
+
+// Whois requests WHOIS information for a nickname
+func (c *Client) Whois(nick string) error {
+	log.Printf("[IRC] Requesting WHOIS for %s...", nick)
+	c.addLog("info", fmt.Sprintf("Requesting WHOIS for %s...", nick), "info")
+
+	// Initialize WHOIS data for this nick
+	c.whoisMu.Lock()
+	c.whoisData[nick] = &WhoisInfo{
+		Nick:     nick,
+		Channels: make([]string, 0),
+	}
+	c.whoisMu.Unlock()
+
+	return c.sendRaw(fmt.Sprintf("WHOIS %s", nick))
+}
+
+// GetWhoisInfo returns WHOIS information for a nickname
+func (c *Client) GetWhoisInfo(nick string) *WhoisInfo {
+	c.whoisMu.Lock()
+	defer c.whoisMu.Unlock()
+
+	if info, ok := c.whoisData[nick]; ok {
+		// Return a copy
+		infoCopy := *info
+		return &infoCopy
+	}
+	return nil
 }
 
 // GetChannelList returns the stored channel list
@@ -433,6 +463,23 @@ func (c *Client) handleMessage(line string) {
 		return
 	}
 
+	// Handle RPL_ENDOFMOTD (376) or ERR_NOMOTD (422) - end of MOTD, perform NickServ auth
+	if parts[1] == "376" || parts[1] == "422" {
+		log.Printf("[IRC] End of MOTD/Registration complete")
+		c.mu.RLock()
+		nickServPassword := c.Server.NickServPassword
+		c.mu.RUnlock()
+
+		// Authenticate with NickServ if password is configured
+		if nickServPassword != "" {
+			log.Printf("[IRC] Authenticating with NickServ...")
+			c.addLog("info", "Authenticating with NickServ...", "info")
+			c.sendRaw(fmt.Sprintf("PRIVMSG NickServ :IDENTIFY %s", nickServPassword))
+			c.addLog("out", "PRIVMSG NickServ :IDENTIFY ********", "protocol")
+		}
+		return
+	}
+
 	// Handle JOIN
 	if len(parts) >= 3 && parts[1] == "JOIN" {
 		channel := strings.TrimPrefix(parts[2], ":")
@@ -594,6 +641,117 @@ func (c *Client) handleMessage(line string) {
 		log.Printf("[IRC] Channel list complete: %d channels", len(c.ChannelList))
 		c.addLog("info", fmt.Sprintf("Channel list complete: %d channels", len(c.ChannelList)), "info")
 		c.listMu.Unlock()
+		return
+	}
+
+	// Handle RPL_WHOISUSER (311) - WHOIS user info
+	// Format: :server 311 client nick username host * :realname
+	if len(parts) >= 8 && parts[1] == "311" {
+		nick := parts[3]
+		username := parts[4]
+		host := parts[5]
+		realname := strings.Join(parts[7:], " ")
+		realname = strings.TrimPrefix(realname, ":")
+
+		c.whoisMu.Lock()
+		if info, ok := c.whoisData[nick]; ok {
+			info.Username = username
+			info.Host = host
+			info.RealName = realname
+		}
+		c.whoisMu.Unlock()
+		log.Printf("[IRC] WHOIS %s: %s@%s (%s)", nick, username, host, realname)
+		return
+	}
+
+	// Handle RPL_WHOISSERVER (312) - WHOIS server info
+	// Format: :server 312 client nick servername :serverinfo
+	if len(parts) >= 5 && parts[1] == "312" {
+		nick := parts[3]
+		server := parts[4]
+		serverInfo := strings.Join(parts[5:], " ")
+		serverInfo = strings.TrimPrefix(serverInfo, ":")
+
+		c.whoisMu.Lock()
+		if info, ok := c.whoisData[nick]; ok {
+			info.Server = server
+			info.ServerInfo = serverInfo
+		}
+		c.whoisMu.Unlock()
+		log.Printf("[IRC] WHOIS %s: on server %s (%s)", nick, server, serverInfo)
+		return
+	}
+
+	// Handle RPL_WHOISOPERATOR (313) - WHOIS operator status
+	// Format: :server 313 client nick :is an IRC operator
+	if len(parts) >= 4 && parts[1] == "313" {
+		nick := parts[3]
+
+		c.whoisMu.Lock()
+		if info, ok := c.whoisData[nick]; ok {
+			info.IsOperator = true
+		}
+		c.whoisMu.Unlock()
+		log.Printf("[IRC] WHOIS %s: is an IRC operator", nick)
+		return
+	}
+
+	// Handle RPL_WHOISIDLE (317) - WHOIS idle time
+	// Format: :server 317 client nick idle signon :seconds idle, signon time
+	if len(parts) >= 6 && parts[1] == "317" {
+		nick := parts[3]
+		var idleTime, signOnTime int64
+		fmt.Sscanf(parts[4], "%d", &idleTime)
+		fmt.Sscanf(parts[5], "%d", &signOnTime)
+
+		c.whoisMu.Lock()
+		if info, ok := c.whoisData[nick]; ok {
+			info.IdleTime = int(idleTime)
+			info.SignOnTime = signOnTime
+		}
+		c.whoisMu.Unlock()
+		log.Printf("[IRC] WHOIS %s: idle %ds, signon %d", nick, idleTime, signOnTime)
+		return
+	}
+
+	// Handle RPL_ENDOFWHOIS (318) - End of WHOIS
+	// Format: :server 318 client nick :End of /WHOIS list
+	if len(parts) >= 4 && parts[1] == "318" {
+		nick := parts[3]
+		log.Printf("[IRC] WHOIS %s: complete", nick)
+		c.addLog("info", fmt.Sprintf("WHOIS %s complete", nick), "info")
+		return
+	}
+
+	// Handle RPL_WHOISCHANNELS (319) - WHOIS channels
+	// Format: :server 319 client nick :channel1 channel2 channel3...
+	if len(parts) >= 5 && parts[1] == "319" {
+		nick := parts[3]
+		channelsStr := strings.Join(parts[4:], " ")
+		channelsStr = strings.TrimPrefix(channelsStr, ":")
+		channels := strings.Fields(channelsStr)
+
+		c.whoisMu.Lock()
+		if info, ok := c.whoisData[nick]; ok {
+			info.Channels = append(info.Channels, channels...)
+		}
+		c.whoisMu.Unlock()
+		log.Printf("[IRC] WHOIS %s: in channels %v", nick, channels)
+		return
+	}
+
+	// Handle RPL_WHOISACCOUNT (330) - WHOIS account (services login)
+	// Format: :server 330 client nick accountname :is logged in as
+	if len(parts) >= 5 && parts[1] == "330" {
+		nick := parts[3]
+		account := parts[4]
+
+		c.whoisMu.Lock()
+		if info, ok := c.whoisData[nick]; ok {
+			info.Account = account
+		}
+		c.whoisMu.Unlock()
+		log.Printf("[IRC] WHOIS %s: logged in as %s", nick, account)
 		return
 	}
 

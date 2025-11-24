@@ -4,7 +4,7 @@
  */
 
 export interface MessagePart {
-  type: "text" | "link" | "mention";
+  type: "text" | "link" | "mention" | "image";
   content: string;
   url?: string;
 }
@@ -70,7 +70,7 @@ function normalizeUrl(text: string): string {
 /**
  * Parses a message text and returns an array of text and link parts
  */
-export function parseMessage(text: string): MessagePart[] {
+export function parseMessage(text: string, inlineImages = false): MessagePart[] {
   if (!text) return [];
 
   const parts: MessagePart[] = [];
@@ -97,12 +97,23 @@ export function parseMessage(text: string): MessagePart[] {
       });
     }
 
-    // Add the URL as a link
-    parts.push({
-      type: "link",
-      content: urlText,
-      url: normalizeUrl(urlText),
-    });
+    const normalizedUrl = normalizeUrl(urlText);
+
+    // Check if it's an image URL and inline images are enabled
+    if (inlineImages && isImageUrl(normalizedUrl)) {
+      parts.push({
+        type: "image",
+        content: urlText,
+        url: normalizedUrl,
+      });
+    } else {
+      // Add the URL as a link
+      parts.push({
+        type: "link",
+        content: urlText,
+        url: normalizedUrl,
+      });
+    }
 
     lastIndex = index + urlText.length;
   }
@@ -224,18 +235,19 @@ export function parseMessageWithMentions(
   text: string,
   nickname: string,
   keywords: string[] = [],
+  inlineImages = false,
 ): MessagePart[] {
   if (!text) return [];
 
   const parts: MessagePart[] = [];
   const allHighlights = [nickname, ...keywords];
 
-  // First parse URLs
-  const urlParts = parseMessage(text);
+  // First parse URLs (with inline image support)
+  const urlParts = parseMessage(text, inlineImages);
 
   // Then check each text part for mentions
   for (const part of urlParts) {
-    if (part.type === "link") {
+    if (part.type === "link" || part.type === "image") {
       parts.push(part);
       continue;
     }
