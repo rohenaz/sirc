@@ -294,6 +294,114 @@ func (c *Client) readLoop() {
 			c.handleMessage(line)
 		}
 	}
+
+	// Connection lost - check if we should reconnect
+	select {
+	case <-c.stopCh:
+		// Intentional disconnect, don't reconnect
+		return
+	default:
+		// Unexpected disconnect
+		c.mu.Lock()
+		wasConnected := c.State == Connected || c.State == Registered
+		autoReconnect := c.Server.AutoReconnect
+		c.State = Disconnected
+		c.mu.Unlock()
+
+		if wasConnected && autoReconnect {
+			log.Printf("[IRC] Connection lost, attempting to reconnect...")
+			c.addLog("error", "Connection lost, attempting to reconnect...", "error")
+			go c.attemptReconnect()
+		} else {
+			log.Printf("[IRC] Connection closed")
+			c.addLog("info", "Connection closed", "info")
+		}
+	}
+}
+
+// attemptReconnect attempts to reconnect with exponential backoff
+func (c *Client) attemptReconnect() {
+	c.mu.Lock()
+	if c.reconnecting {
+		c.mu.Unlock()
+		return // Already reconnecting
+	}
+	c.reconnecting = true
+	c.reconnectCount = 0
+	c.mu.Unlock()
+
+	const maxAttempts = 10
+	const maxBackoff = 60 * time.Second
+
+	for {
+		c.mu.Lock()
+		count := c.reconnectCount
+		c.mu.Unlock()
+
+		if count >= maxAttempts {
+			log.Printf("[IRC] Max reconnect attempts (%d) reached, giving up", maxAttempts)
+			c.addLog("error", fmt.Sprintf("Max reconnect attempts (%d) reached, giving up", maxAttempts), "error")
+			c.mu.Lock()
+			c.reconnecting = false
+			c.mu.Unlock()
+			return
+		}
+
+		// Calculate exponential backoff: 2^count seconds, capped at maxBackoff
+		backoff := time.Duration(1<<uint(count)) * time.Second
+		if backoff > maxBackoff {
+			backoff = maxBackoff
+		}
+
+		log.Printf("[IRC] Reconnect attempt %d/%d in %v...", count+1, maxAttempts, backoff)
+		c.addLog("info", fmt.Sprintf("Reconnect attempt %d/%d in %v...", count+1, maxAttempts, backoff), "info")
+
+		time.Sleep(backoff)
+
+		// Try to reconnect
+		c.mu.Lock()
+		c.reconnectCount++
+		// Save joined channels before reconnecting
+		joinedChannels := make([]string, 0)
+		for name, ch := range c.Channels {
+			if ch.Joined {
+				joinedChannels = append(joinedChannels, name)
+			}
+		}
+		c.joinedChannels = joinedChannels
+		c.mu.Unlock()
+
+		err := c.Connect()
+		if err != nil {
+			log.Printf("[IRC] Reconnect failed: %v", err)
+			c.addLog("error", fmt.Sprintf("Reconnect failed: %v", err), "error")
+			continue
+		}
+
+		log.Printf("[IRC] Reconnected successfully!")
+		c.addLog("info", "Reconnected successfully!", "info")
+
+		// Wait a moment for registration
+		time.Sleep(2 * time.Second)
+
+		// Rejoin channels
+		c.mu.RLock()
+		channels := c.joinedChannels
+		c.mu.RUnlock()
+
+		for _, channel := range channels {
+			log.Printf("[IRC] Rejoining channel %s...", channel)
+			c.addLog("info", fmt.Sprintf("Rejoining channel %s...", channel), "info")
+			c.JoinChannel(channel)
+		}
+
+		c.mu.Lock()
+		c.reconnecting = false
+		c.reconnectCount = 0
+		c.mu.Unlock()
+
+		return
+	}
 }
 
 // handleMessage processes incoming IRC messages
