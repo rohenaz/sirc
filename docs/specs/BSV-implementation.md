@@ -70,7 +70,7 @@ Production-ready BRC-100 compliant wallet building blocks:
 go-wallet-toolbox/
 ├── pkg/wallet/         # Wallet orchestration
 ├── pkg/storage/        # GORM-based persistence (SQLite/MySQL/Postgres)
-├── pkg/services/       # ARC, WhatsOnChain, Bitails integrations
+├── pkg/services/       # ARC, WhatsOnChain integrations
 ├── pkg/monitor/        # Background task processing
 ├── pkg/wdk/            # Transaction construction helpers
 └── cmd/infra/          # Storage server (HTTP on :8100)
@@ -346,16 +346,6 @@ WOC provides balance and UTXO queries:
 GET /v1/bsv/main/address/{address}/balance
 GET /v1/bsv/main/address/{address}/unspent
 GET /v1/bsv/main/tx/{txid}
-```
-
-### Bitails (Alternative Service)
-
-Backup service for redundancy:
-
-```go
-// Bitails endpoints
-GET /api/address/{address}/utxos
-POST /api/tx/broadcast
 ```
 
 ---
