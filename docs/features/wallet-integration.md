@@ -19,7 +19,7 @@ SIRC integrates cryptocurrency wallet functionality directly into the IRC client
 
 | Coin | Network | Standard | Go SDK | Notes |
 |------|---------|----------|--------|-------|
-| BSV | Bitcoin SV | BRC-100 | `github.com/bitcoin-sv/go-sdk` | SPV validation, Paymail support |
+| BSV | Bitcoin SV | BRC-100 | `github.com/bsv-blockchain/go-sdk` | SPV validation, Paymail support |
 | SOL | Solana | Native | `github.com/gagliardetto/solana-go` | Fast finality, low fees |
 
 ### Future Phases
@@ -377,9 +377,9 @@ The BSV wallet follows [BRC-100](https://github.com/bitcoin-sv/BRCs/blob/master/
 
 ```go
 import (
-    "github.com/bitcoin-sv/go-sdk/transaction"
-    "github.com/bitcoin-sv/go-sdk/bscript"
-    "github.com/bitcoin-sv/go-sdk/ec"
+    "github.com/bsv-blockchain/go-sdk/transaction"
+    "github.com/bsv-blockchain/go-sdk/bscript"
+    "github.com/bsv-blockchain/go-sdk/ec"
 )
 ```
 
@@ -575,7 +575,7 @@ Settings → Wallet
 
 ### Phase 2: BSV Wallet (Week 3-4)
 
-- [ ] Integrate `bitcoin-sv/go-sdk`
+- [ ] Integrate `bsv-blockchain/go-sdk`
 - [ ] Implement key generation (BRC-42)
 - [ ] Add balance checking via SPV
 - [ ] Implement send transaction
@@ -662,9 +662,9 @@ func TestEncryption_RoundTrip(t *testing.T)
 ### BSV
 
 - [BRC-100 Specification](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0100.md)
-- [BSV Go SDK](https://github.com/bitcoin-sv/go-sdk)
+- [BSV Go SDK](https://github.com/bsv-blockchain/go-sdk)
 - [BSV Skills Center](https://docs.bsvblockchain.org/)
-- [SPV Wallet](https://github.com/bitcoin-sv/spv-wallet)
+- [SPV Wallet](https://github.com/bsv-blockchain/spv-wallet)
 
 ### Solana
 

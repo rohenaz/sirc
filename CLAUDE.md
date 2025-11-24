@@ -186,7 +186,7 @@ Add wallet-centric IRC commands for peer-to-peer cryptocurrency payments, starti
 ### Required Libraries
 
 **Go (Backend):**
-- `github.com/bitcoin-sv/go-sdk` - BSV transactions, keys, SPV
+- `github.com/bsv-blockchain/go-sdk` - BSV transactions, keys, SPV
 - `github.com/gagliardetto/solana-go` - Solana transactions, wallets
 
 **TypeScript (Frontend):**
