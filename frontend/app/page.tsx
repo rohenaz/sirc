@@ -30,11 +30,13 @@ import {
   showPrivateMessageNotification,
   shouldNotify,
 } from "@/lib/notifications";
+import { useKeyboardShortcuts, type KeyboardShortcut } from "@/lib/keyboard-shortcuts";
 
 // Dynamic import for components that use Wails bindings
 const AddServerDialog = dynamic(() => import("@/components/AddServerDialog").then(m => ({ default: m.AddServerDialog })), { ssr: false });
 const JoinChannelDialog = dynamic(() => import("@/components/JoinChannelDialog").then(m => ({ default: m.JoinChannelDialog })), { ssr: false });
 const ChannelBrowserDialog = dynamic(() => import("@/components/ChannelBrowserDialog").then(m => ({ default: m.ChannelBrowserDialog })), { ssr: false });
+const KeyboardShortcutsDialog = dynamic(() => import("@/components/KeyboardShortcutsDialog").then(m => ({ default: m.KeyboardShortcutsDialog })), { ssr: false });
 
 // Dynamically import Wails bindings (client-side only)
 type IRCServiceBindings = typeof import("@/bindings/sirc/pkg/services/ircservice");
@@ -55,6 +57,7 @@ export default function Home() {
   const [showAddServer, setShowAddServer] = useState(false);
   const [showJoinChannel, setShowJoinChannel] = useState(false);
   const [showBrowseChannels, setShowBrowseChannels] = useState(false);
+  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const [servers, setServers] = useState<(Server | null)[]>([]);
   const [activeServerId, setActiveServerId] = useState<string>("");
   const [activeChannel, setActiveChannel] = useState<string>("");
@@ -99,6 +102,119 @@ export default function Home() {
     }
   }, [bindingsLoaded]);
 
+  // Helper to get all channels across all servers
+  const getAllChannels = useCallback(() => {
+    const allChannels: Array<{ serverId: string; channel: string }> = [];
+    for (const server of servers) {
+      if (!server) continue;
+      // This would need GetChannels to be called, but we'll implement a simpler version
+      // For now, just track the active channel
+    }
+    return allChannels;
+  }, [servers]);
+
+  // Helper to switch to next/previous channel
+  const switchChannel = useCallback((direction: "next" | "prev") => {
+    if (!activeServerId) return;
+
+    const activeServer = servers.find((s) => s?.id === activeServerId);
+    if (!activeServer) return;
+
+    // This is a simplified version - in a real implementation we'd need to
+    // fetch the channels and switch between them
+    console.log(`[Keyboard] Switch channel ${direction}`);
+  }, [activeServerId, servers]);
+
+  // Helper to part current channel
+  const partCurrentChannel = useCallback(async () => {
+    if (!activeServerId || !activeChannel || !PartChannel) return;
+
+    try {
+      await PartChannel(activeServerId, activeChannel);
+      setActiveChannel("");
+    } catch (error) {
+      console.error("Failed to part channel:", error);
+    }
+  }, [activeServerId, activeChannel]);
+
+  // Define keyboard shortcuts
+  const shortcuts: KeyboardShortcut[] = [
+    // Navigation
+    {
+      key: "ArrowUp",
+      ctrl: true,
+      description: "Switch to previous channel",
+      category: "Navigation",
+      handler: () => switchChannel("prev"),
+    },
+    {
+      key: "ArrowDown",
+      ctrl: true,
+      description: "Switch to next channel",
+      category: "Navigation",
+      handler: () => switchChannel("next"),
+    },
+
+    // Actions
+    {
+      key: "t",
+      ctrl: true,
+      description: "Add new server",
+      category: "Actions",
+      handler: () => setShowAddServer(true),
+    },
+    {
+      key: "j",
+      ctrl: true,
+      description: "Join channel",
+      category: "Actions",
+      handler: () => {
+        if (activeServerId) {
+          setShowJoinChannel(true);
+        }
+      },
+    },
+    {
+      key: "b",
+      ctrl: true,
+      description: "Browse channels",
+      category: "Actions",
+      handler: () => {
+        if (activeServerId) {
+          setShowBrowseChannels(true);
+        }
+      },
+    },
+    {
+      key: "w",
+      ctrl: true,
+      description: "Part current channel",
+      category: "Actions",
+      handler: partCurrentChannel,
+    },
+
+    // View
+    {
+      key: "l",
+      ctrl: true,
+      description: "Toggle IRC log",
+      category: "View",
+      handler: () => setIrcLogCollapsed((prev) => !prev),
+    },
+
+    // Help
+    {
+      key: "/",
+      ctrl: true,
+      description: "Show keyboard shortcuts",
+      category: "Help",
+      handler: () => setShowKeyboardShortcuts((prev) => !prev),
+    },
+  ];
+
+  // Register keyboard shortcuts
+  useKeyboardShortcuts(shortcuts);
+
   const activeServer = servers.find((s) => s?.id === activeServerId);
 
   return (
@@ -107,6 +223,11 @@ export default function Home() {
         open={showAddServer}
         onOpenChange={setShowAddServer}
         onServerAdded={loadServers}
+      />
+      <KeyboardShortcutsDialog
+        open={showKeyboardShortcuts}
+        onOpenChange={setShowKeyboardShortcuts}
+        shortcuts={shortcuts}
       />
       {activeServer && (
         <>
