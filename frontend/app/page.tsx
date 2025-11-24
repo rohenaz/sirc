@@ -37,6 +37,7 @@ const AddServerDialog = dynamic(() => import("@/components/AddServerDialog").the
 const JoinChannelDialog = dynamic(() => import("@/components/JoinChannelDialog").then(m => ({ default: m.JoinChannelDialog })), { ssr: false });
 const ChannelBrowserDialog = dynamic(() => import("@/components/ChannelBrowserDialog").then(m => ({ default: m.ChannelBrowserDialog })), { ssr: false });
 const KeyboardShortcutsDialog = dynamic(() => import("@/components/KeyboardShortcutsDialog").then(m => ({ default: m.KeyboardShortcutsDialog })), { ssr: false });
+const SettingsDialog = dynamic(() => import("@/components/SettingsDialog").then(m => ({ default: m.SettingsDialog })), { ssr: false });
 
 // Dynamically import Wails bindings (client-side only)
 type IRCServiceBindings = typeof import("@/bindings/sirc/pkg/services/ircservice");
@@ -58,6 +59,7 @@ export default function Home() {
   const [showJoinChannel, setShowJoinChannel] = useState(false);
   const [showBrowseChannels, setShowBrowseChannels] = useState(false);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [servers, setServers] = useState<(Server | null)[]>([]);
   const [activeServerId, setActiveServerId] = useState<string>("");
   const [activeChannel, setActiveChannel] = useState<string>("");
@@ -101,6 +103,27 @@ export default function Home() {
       loadServers();
     }
   }, [bindingsLoaded]);
+
+  // Listen for native menu events
+  useEffect(() => {
+    const handleOpenSettings = () => setShowSettings(true);
+    const handleOpenKeyboardShortcuts = () => setShowKeyboardShortcuts(true);
+
+    // @ts-ignore - Wails events not typed
+    if (typeof window !== "undefined" && window.wails) {
+      // @ts-ignore
+      window.wails.Events.On("open-settings", handleOpenSettings);
+      // @ts-ignore
+      window.wails.Events.On("open-keyboard-shortcuts", handleOpenKeyboardShortcuts);
+
+      return () => {
+        // @ts-ignore
+        window.wails.Events.Off("open-settings");
+        // @ts-ignore
+        window.wails.Events.Off("open-keyboard-shortcuts");
+      };
+    }
+  }, []);
 
   // Helper to get all channels across all servers
   const getAllChannels = useCallback(() => {
@@ -210,6 +233,13 @@ export default function Home() {
       category: "Help",
       handler: () => setShowKeyboardShortcuts((prev) => !prev),
     },
+    {
+      key: ",",
+      ctrl: true,
+      description: "Open settings",
+      category: "Help",
+      handler: () => setShowSettings(true),
+    },
   ];
 
   // Register keyboard shortcuts
@@ -228,6 +258,10 @@ export default function Home() {
         open={showKeyboardShortcuts}
         onOpenChange={setShowKeyboardShortcuts}
         shortcuts={shortcuts}
+      />
+      <SettingsDialog
+        open={showSettings}
+        onOpenChange={setShowSettings}
       />
       {activeServer && (
         <>
