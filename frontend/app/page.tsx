@@ -21,6 +21,7 @@ import {
   ContextMenuSeparator,
 } from "@/components/ui/context-menu";
 import { Button } from "@/components/ui/button";
+import { MessageText } from "@/components/MessageText";
 import type { Server, Channel, Message } from "@/bindings/sirc/pkg/irc/models";
 
 // Dynamic import for components that use Wails bindings
@@ -646,7 +647,7 @@ function ChatMessages({ serverId, channel }: ChatMessagesProps) {
           <div key={idx} className="px-1 py-0.5 hover:bg-accent/50 rounded text-[11px]">
             <span className="text-[10px] text-muted-foreground">{time}</span>
             <span className="mx-1.5 font-medium text-primary">{msg.from}:</span>
-            <span className="text-foreground">{msg.text}</span>
+            <MessageText text={msg.text} className="text-foreground" />
           </div>
         );
       })}
