@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { POLLING, MESSAGES } from "@/lib/constants";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -22,6 +23,7 @@ import {
 } from "@/components/ui/context-menu";
 import { Button } from "@/components/ui/button";
 import { MessageText } from "@/components/MessageText";
+import { StatusBar } from "@/components/StatusBar";
 import type { Server, Channel, Message } from "@/bindings/sirc/pkg/irc/models";
 import { checkHighlight } from "@/lib/message-parser";
 import {
@@ -65,6 +67,7 @@ export default function Home() {
   const [activeChannel, setActiveChannel] = useState<string>("");
   const [bindingsLoaded, setBindingsLoaded] = useState(false);
   const [ircLogCollapsed, setIrcLogCollapsed] = useState(false);
+  const ircLogPanelRef = useRef<any>(null);
 
   // Load Wails bindings on client side only
   useEffect(() => {
@@ -85,12 +88,16 @@ export default function Home() {
     });
   }, []);
 
-  const loadServers = async () => {
+  const loadServers = async (selectServerId?: string) => {
     if (!bindingsLoaded) return;
     try {
       const serverList = await GetServers();
       setServers(serverList);
-      if (serverList.length > 0 && serverList[0]) {
+      if (selectServerId) {
+        // Auto-select the specified server
+        setActiveServerId(selectServerId);
+      } else if (serverList.length > 0 && serverList[0] && !activeServerId) {
+        // Only auto-select first server if no server is currently selected
         setActiveServerId(serverList[0].id);
       }
     } catch (error) {
@@ -109,20 +116,27 @@ export default function Home() {
     const handleOpenSettings = () => setShowSettings(true);
     const handleOpenKeyboardShortcuts = () => setShowKeyboardShortcuts(true);
 
-    // @ts-ignore - Wails events not typed
-    if (typeof window !== "undefined" && window.wails) {
-      // @ts-ignore
-      window.wails.Events.On("open-settings", handleOpenSettings);
-      // @ts-ignore
-      window.wails.Events.On("open-keyboard-shortcuts", handleOpenKeyboardShortcuts);
+    let cleanupFns: Array<() => void> = [];
 
-      return () => {
-        // @ts-ignore
-        window.wails.Events.Off("open-settings");
-        // @ts-ignore
-        window.wails.Events.Off("open-keyboard-shortcuts");
-      };
-    }
+    // Initialize Wails runtime and set up event listeners
+    (async () => {
+      try {
+        const { initializeWailsRuntime } = await import("@/lib/wails-runtime");
+        const Events = await initializeWailsRuntime();
+
+        if (Events) {
+          cleanupFns.push(Events.On("open-settings", handleOpenSettings));
+          cleanupFns.push(Events.On("open-keyboard-shortcuts", handleOpenKeyboardShortcuts));
+        }
+      } catch (error) {
+        console.error("Failed to initialize Wails events:", error);
+      }
+    })();
+
+    // Cleanup on unmount
+    return () => {
+      cleanupFns.forEach(cleanup => cleanup());
+    };
   }, []);
 
   // Helper to get all channels across all servers
@@ -248,11 +262,11 @@ export default function Home() {
   const activeServer = servers.find((s) => s?.id === activeServerId);
 
   return (
-    <>
+    <div className="h-full flex flex-col">
       <AddServerDialog
         open={showAddServer}
         onOpenChange={setShowAddServer}
-        onServerAdded={loadServers}
+        onServerAdded={(serverId) => loadServers(serverId)}
       />
       <KeyboardShortcutsDialog
         open={showKeyboardShortcuts}
@@ -270,7 +284,10 @@ export default function Home() {
             onOpenChange={setShowJoinChannel}
             serverId={activeServer.id}
             serverName={activeServer.name}
-            onChannelJoined={loadServers}
+            onChannelJoined={(channelName) => {
+              setActiveChannel(channelName);
+              loadServers();
+            }}
           />
           <ChannelBrowserDialog
             open={showBrowseChannels}
@@ -304,11 +321,8 @@ export default function Home() {
       <ResizablePanelGroup direction="horizontal" className="h-full w-full">
         {/* Left: Server/Channel Tree */}
         <ResizablePanel defaultSize={15} minSize={12} maxSize={25}>
-          <div className="h-full flex flex-col bg-card border-r">
-            <div className="px-2 py-1.5 border-b bg-muted/40">
-              <h2 className="font-semibold text-xs">SERVERS</h2>
-            </div>
-            <div className="flex-1 overflow-auto p-1">
+          <div className="h-full flex flex-col bg-card">
+            <div className="flex-1 overflow-auto p-1 pt-[50px]">
               <ServerTree
                 servers={servers}
                 activeServerId={activeServerId}
@@ -348,8 +362,8 @@ export default function Home() {
               <ResizablePanel defaultSize={75} minSize={50}>
                 <div className="h-full flex flex-col bg-background">
                   {/* Channel Header */}
-                  <div className="px-3 py-1.5 border-b bg-card">
-                    <div className="flex items-center justify-between">
+                  <div className="px-3 py-2 border-b bg-card min-h-[50px] flex items-center">
+                    <div className="flex items-center justify-between w-full">
                       <div>
                         <h3 className="font-semibold text-xs">{activeChannel || "No channel"}</h3>
                         <p className="text-[10px] text-muted-foreground">
@@ -385,8 +399,13 @@ export default function Home() {
               {/* User List */}
               <ResizablePanel defaultSize={25} minSize={15} maxSize={35}>
                 <div className="h-full flex flex-col bg-card border-l">
-                  <div className="px-2 py-1.5 border-b bg-muted/40">
-                    <h3 className="font-semibold text-xs">USERS</h3>
+                  <div className="px-2 py-2 border-b bg-muted/40 min-h-[50px] flex items-center">
+                    <div>
+                      <h3 className="font-semibold text-xs">USERS</h3>
+                      <p className="text-[10px] text-muted-foreground">
+                        {activeChannel ? `${activeChannel} users` : "No channel"}
+                      </p>
+                    </div>
                   </div>
                   <div className="flex-1 overflow-auto">
                     <UserList serverId={activeServerId} channel={activeChannel} />
@@ -400,38 +419,47 @@ export default function Home() {
 
           {/* Bottom: IRC Protocol Log */}
           <ResizablePanel
-            defaultSize={ircLogCollapsed ? 5 : 30}
-            minSize={5}
+            ref={ircLogPanelRef}
+            defaultSize={30}
+            minSize={0}
             maxSize={50}
+            collapsedSize={0}
             collapsible={true}
             onCollapse={() => setIrcLogCollapsed(true)}
             onExpand={() => setIrcLogCollapsed(false)}
           >
-            <div className="h-full flex flex-col bg-card border-t">
+            <div className="h-full flex flex-col bg-card border-t overflow-hidden">
               <div
-                className="px-3 py-1.5 border-b bg-muted/40 flex items-center justify-between cursor-pointer hover:bg-muted/60 transition-colors"
-                onClick={() => setIrcLogCollapsed(!ircLogCollapsed)}
+                className="px-3 py-1.5 border-b bg-muted/40 flex items-center justify-between flex-shrink-0 cursor-pointer hover:bg-muted/60 transition-colors"
+                onClick={() => {
+                  if (ircLogPanelRef.current) {
+                    if (ircLogCollapsed) {
+                      ircLogPanelRef.current.expand();
+                    } else {
+                      ircLogPanelRef.current.collapse();
+                    }
+                  }
+                }}
               >
                 <h3 className="font-semibold text-xs">IRC PROTOCOL LOG</h3>
-                <Button variant="ghost" className="h-5 w-5 p-0">
+                <div className="pointer-events-none">
                   {ircLogCollapsed ? (
                     <ChevronUp className="h-4 w-4" />
                   ) : (
                     <ChevronDown className="h-4 w-4" />
                   )}
-                </Button>
-              </div>
-              {!ircLogCollapsed && (
-                <div className="flex-1 overflow-auto">
-                  <IRCLog serverId={activeServerId} />
                 </div>
-              )}
+              </div>
+              <div className="flex-1 overflow-auto min-h-0">
+                <IRCLog serverId={activeServerId} />
+              </div>
             </div>
           </ResizablePanel>
         </ResizablePanelGroup>
       </ResizablePanel>
     </ResizablePanelGroup>
-    </>
+    <StatusBar servers={servers} activeServerId={activeServerId} activeChannel={activeChannel} />
+    </div>
   );
 }
 
@@ -459,11 +487,18 @@ function ServerTree({
   const [connectionStates, setConnectionStates] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    // Auto-expand first server
-    if (servers.length > 0 && servers[0]) {
+    // Auto-expand first server on initial load
+    if (servers.length > 0 && servers[0] && openServers.size === 0) {
       setOpenServers(new Set([servers[0].id]));
     }
   }, [servers]);
+
+  // Auto-expand active server when it changes
+  useEffect(() => {
+    if (activeServerId && !openServers.has(activeServerId)) {
+      setOpenServers((prev) => new Set([...prev, activeServerId]));
+    }
+  }, [activeServerId]);
 
   // Poll for channels (refresh every 1 second)
   useEffect(() => {
@@ -489,8 +524,8 @@ function ServerTree({
     // Load immediately
     loadChannels();
 
-    // Then poll every 1 second
-    const interval = setInterval(loadChannels, 1000);
+    // Then poll using the constant interval
+    const interval = setInterval(loadChannels, POLLING.CHANNELS);
     return () => clearInterval(interval);
   }, [openServers, GetChannels]);
 
@@ -511,7 +546,7 @@ function ServerTree({
     };
 
     updateConnectionStates();
-    const interval = setInterval(updateConnectionStates, 1000);
+    const interval = setInterval(updateConnectionStates, POLLING.CONNECTION_STATE);
     return () => clearInterval(interval);
   }, [servers, GetConnectionState]);
 
@@ -739,6 +774,8 @@ function ChatMessages({ serverId, channel }: ChatMessagesProps) {
   const [currentNick, setCurrentNick] = useState<string>("");
   const [previousMessageCount, setPreviousMessageCount] = useState(0);
   const [notificationPermissionRequested, setNotificationPermissionRequested] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const lastMessageCountRef = useRef<number>(0);
 
   // Request notification permission on mount
   useEffect(() => {
@@ -807,8 +844,20 @@ function ChatMessages({ serverId, channel }: ChatMessagesProps) {
         }
       }
 
-      setPreviousMessageCount(msgs.length);
-      setMessages(msgs);
+      // Prune messages if they exceed the limit
+      let prunedMessages = msgs;
+      if (msgs.length > MESSAGES.MAX_DISPLAYED) {
+        // Keep only the most recent PRUNE_TO messages
+        prunedMessages = msgs.slice(msgs.length - MESSAGES.PRUNE_TO);
+        console.log(`[ChatMessages] Pruned messages from ${msgs.length} to ${prunedMessages.length}`);
+      }
+
+      // Only update state if the message count changed (avoids unnecessary re-renders)
+      if (prunedMessages.length !== lastMessageCountRef.current) {
+        lastMessageCountRef.current = prunedMessages.length;
+        setPreviousMessageCount(prunedMessages.length);
+        setMessages(prunedMessages);
+      }
     } catch (error) {
       // Channel might not be joined yet or no messages, that's ok
       console.debug("Failed to fetch messages:", error);
@@ -819,6 +868,8 @@ function ChatMessages({ serverId, channel }: ChatMessagesProps) {
   // Reset message count when channel changes
   useEffect(() => {
     setPreviousMessageCount(0);
+    lastMessageCountRef.current = 0;
+    setMessages([]);
   }, [serverId, channel]);
 
   // Initial load
@@ -828,16 +879,81 @@ function ChatMessages({ serverId, channel }: ChatMessagesProps) {
     fetchMessages().finally(() => setLoading(false));
   }, [GetMessages, fetchMessages]);
 
-  // Poll for new messages every 1 second
+  // Listen for real-time message events from backend
   useEffect(() => {
-    if (!serverId || !channel || !GetMessages) return;
+    if (!serverId || !channel) return;
 
-    const interval = setInterval(() => {
-      fetchMessages();
-    }, 1000);
+    let cleanup: (() => void) | null = null;
 
-    return () => clearInterval(interval);
-  }, [serverId, channel, GetMessages, fetchMessages]);
+    (async () => {
+      try {
+        const { initializeWailsRuntime } = await import("@/lib/wails-runtime");
+        const Events = await initializeWailsRuntime();
+
+        if (Events) {
+          cleanup = Events.On("irc:message", (data: any) => {
+            // Only process messages for the active channel
+            if (data.serverId === serverId && data.channel === channel) {
+              // Append new message instead of re-fetching everything
+              setMessages((prev) => {
+                const newMessages = [...prev, data.message];
+                // Prune if needed
+                if (newMessages.length > MESSAGES.MAX_DISPLAYED) {
+                  return newMessages.slice(newMessages.length - MESSAGES.PRUNE_TO);
+                }
+                return newMessages;
+              });
+              setPreviousMessageCount((prev) => prev + 1);
+              lastMessageCountRef.current += 1;
+            }
+          });
+        }
+      } catch (error) {
+        console.error("Failed to set up message event listener:", error);
+      }
+    })();
+
+    return () => {
+      if (cleanup) cleanup();
+    };
+  }, [serverId, channel]);
+
+  // Auto-scroll to bottom when new messages arrive (only if we're near the bottom)
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      const container = messagesEndRef.current.parentElement;
+      if (container) {
+        const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+        if (isNearBottom) {
+          messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+        }
+      }
+    }
+  }, [messages.length]);
+
+  // Memoize rendered messages to prevent re-renders during polling
+  const renderedMessages = useMemo(() => {
+    return messages.map((msg, idx) => {
+      if (!msg) return null;
+      const time = new Date(msg.timestamp).toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      // Use a stable key based on timestamp + from + text to prevent re-renders
+      const stableKey = `${msg.timestamp}-${msg.from}-${idx}`;
+      return (
+        <div key={stableKey} className="px-1 py-0.5 hover:bg-accent/50 rounded text-[11px]">
+          <span className="text-[10px] text-muted-foreground">{time}</span>
+          <span className="mx-1.5 font-medium text-primary">{msg.from}:</span>
+          <MessageText
+            text={msg.text}
+            className="text-foreground"
+            currentNick={currentNick}
+          />
+        </div>
+      );
+    });
+  }, [messages, currentNick]);
 
   if (loading) {
     return (
@@ -868,24 +984,8 @@ function ChatMessages({ serverId, channel }: ChatMessagesProps) {
 
   return (
     <div className="space-y-1">
-      {messages.map((msg, idx) => {
-        if (!msg) return null;
-        const time = new Date(msg.timestamp).toLocaleTimeString("en-US", {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-        return (
-          <div key={idx} className="px-1 py-0.5 hover:bg-accent/50 rounded text-[11px]">
-            <span className="text-[10px] text-muted-foreground">{time}</span>
-            <span className="mx-1.5 font-medium text-primary">{msg.from}:</span>
-            <MessageText
-              text={msg.text}
-              className="text-foreground"
-              currentNick={currentNick}
-            />
-          </div>
-        );
-      })}
+      {renderedMessages}
+      <div ref={messagesEndRef} />
     </div>
   );
 }
@@ -930,8 +1030,8 @@ function UserList({ serverId, channel }: UserListProps) {
 
     fetchUsers();
 
-    // Poll for updates every 2 seconds
-    const interval = setInterval(fetchUsers, 2000);
+    // Poll for updates using the constant interval
+    const interval = setInterval(fetchUsers, POLLING.USER_LIST);
     return () => clearInterval(interval);
   }, [serverId, channel, GetChannels]);
 
@@ -995,6 +1095,14 @@ interface IRCLogProps {
 
 function IRCLog({ serverId }: IRCLogProps) {
   const [logs, setLogs] = useState<any[]>([]);
+  const [GetLogs, setGetLogs] = useState<any>(null);
+
+  // Dynamically import Wails bindings (client-side only)
+  useEffect(() => {
+    import("@/bindings/sirc/pkg/services/ircservice").then((module) => {
+      setGetLogs(() => module.GetLogs);
+    });
+  }, []);
 
   // Fetch logs from backend
   const fetchLogs = async () => {
@@ -1018,16 +1126,46 @@ function IRCLog({ serverId }: IRCLogProps) {
     fetchLogs();
   }, [serverId, GetLogs]);
 
-  // Poll for new logs every 1 second
+  // Listen for real-time log events from backend
   useEffect(() => {
-    if (!serverId || !GetLogs) return;
+    if (!serverId) return;
 
-    const interval = setInterval(() => {
-      fetchLogs();
-    }, 1000);
+    let cleanup: (() => void) | null = null;
 
-    return () => clearInterval(interval);
-  }, [serverId, GetLogs]);
+    (async () => {
+      try {
+        const { initializeWailsRuntime } = await import("@/lib/wails-runtime");
+        const Events = await initializeWailsRuntime();
+
+        if (Events) {
+          console.log("[IRCLog] Setting up irc:log event listener for", serverId);
+          cleanup = Events.On("irc:log", (data: any) => {
+            console.log("[IRCLog] Received irc:log event:", data);
+            // Only process logs for the active server
+            if (data.serverId === serverId) {
+              console.log("[IRCLog] Appending log entry to state");
+              // Append new log entry
+              setLogs((prev) => {
+                const newLogs = [...prev, data.entry];
+                console.log("[IRCLog] New logs count:", newLogs.length);
+                return newLogs;
+              });
+            }
+          });
+          console.log("[IRCLog] Event listener setup complete");
+        }
+      } catch (error) {
+        console.error("Failed to set up log event listener:", error);
+      }
+    })();
+
+    return () => {
+      if (cleanup) {
+        console.log("[IRCLog] Cleaning up event listener");
+        cleanup();
+      }
+    };
+  }, [serverId]);
 
   if (!serverId) {
     return (

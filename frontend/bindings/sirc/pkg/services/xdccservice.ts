@@ -8,7 +8,7 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Create } from "@wailsio/runtime";
+import {Call as $Call, Create as $Create} from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -17,53 +17,62 @@ import * as dcc$0 from "../dcc/models";
 /**
  * CancelDownload cancels and removes a download
  */
-export function CancelDownload(transferID: string): $CancellablePromise<void> {
-    return $Call.ByID(3338022325, transferID);
+export function CancelDownload(transferID: string): Promise<void> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(3338022325, transferID) as any;
+    return $resultPromise;
 }
 
 /**
  * GetDownloads returns all downloads
  */
-export function GetDownloads(): $CancellablePromise<(dcc$0.Transfer | null)[]> {
-    return $Call.ByID(3532902546).then(($result: any) => {
+export function GetDownloads(): Promise<(dcc$0.Transfer | null)[]> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(3532902546) as any;
+    let $typingPromise = $resultPromise.then(($result: any) => {
         return $$createType2($result);
-    });
+    }) as any;
+    $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
+    return $typingPromise;
 }
 
 /**
  * ParseDCCSend parses a DCC SEND message and starts the download
  * This would typically be called when receiving a CTCP DCC SEND message
  */
-export function ParseDCCSend(serverID: string, bot: string, message: string): $CancellablePromise<void> {
-    return $Call.ByID(2865191870, serverID, bot, message);
+export function ParseDCCSend(serverID: string, bot: string, message: string): Promise<void> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(2865191870, serverID, bot, message) as any;
+    return $resultPromise;
 }
 
 /**
  * PauseDownload pauses a download
  */
-export function PauseDownload(transferID: string): $CancellablePromise<void> {
-    return $Call.ByID(3127134715, transferID);
+export function PauseDownload(transferID: string): Promise<void> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(3127134715, transferID) as any;
+    return $resultPromise;
 }
 
 /**
  * RequestPack requests an XDCC pack from a bot
  */
-export function RequestPack(serverID: string, bot: string, packNumber: number): $CancellablePromise<void> {
-    return $Call.ByID(1111509985, serverID, bot, packNumber);
+export function RequestPack(serverID: string, bot: string, packNumber: number): Promise<void> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(1111509985, serverID, bot, packNumber) as any;
+    return $resultPromise;
 }
 
 /**
  * ResumeDownload resumes a download
  */
-export function ResumeDownload(transferID: string): $CancellablePromise<void> {
-    return $Call.ByID(2573614140, transferID);
+export function ResumeDownload(transferID: string): Promise<void> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(2573614140, transferID) as any;
+    return $resultPromise;
 }
 
 /**
  * SetMaxConcurrentDownloads sets the maximum number of concurrent downloads
  */
-export function SetMaxConcurrentDownloads(max: number): $CancellablePromise<void> {
-    return $Call.ByID(1029505585, max);
+export function SetMaxConcurrentDownloads(max: number): Promise<void> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(1029505585, max) as any;
+    return $resultPromise;
 }
 
 // Private type creation functions

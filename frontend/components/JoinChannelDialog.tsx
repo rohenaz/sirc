@@ -20,7 +20,7 @@ interface JoinChannelDialogProps {
   onOpenChange: (open: boolean) => void;
   serverId: string;
   serverName: string;
-  onChannelJoined?: () => void;
+  onChannelJoined?: (channelName: string) => void;
 }
 
 export function JoinChannelDialog({
@@ -48,7 +48,7 @@ export function JoinChannelDialog({
       // Reset form and close dialog
       setChannel("");
       onOpenChange(false);
-      onChannelJoined?.();
+      onChannelJoined?.(channelName);
     } catch (error) {
       console.error("Failed to join channel:", error);
       alert(`Failed to join channel: ${error}`);
@@ -63,7 +63,7 @@ export function JoinChannelDialog({
       await JoinChannel(serverId, channelName);
       setChannel("");
       onOpenChange(false);
-      onChannelJoined?.();
+      onChannelJoined?.(channelName);
     } catch (error) {
       console.error("Failed to join channel:", error);
       alert(`Failed to join channel: ${error}`);

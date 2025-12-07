@@ -8,8 +8,11 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Create } from "@wailsio/runtime";
+import {Call as $Call, Create as $Create} from "@wailsio/runtime";
 
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as application$0 from "../../../github.com/wailsapp/wails/v3/pkg/application/models";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as irc$0 from "../irc/models";
@@ -17,149 +20,190 @@ import * as irc$0 from "../irc/models";
 /**
  * AddServer adds a new IRC server
  */
-export function AddServer(server: irc$0.Server | null): $CancellablePromise<void> {
-    return $Call.ByID(1026151903, server);
+export function AddServer(server: irc$0.Server | null): Promise<void> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(1026151903, server) as any;
+    return $resultPromise;
 }
 
 /**
  * Connect connects to an IRC server
  * Connections are made asynchronously to allow multiple servers to connect concurrently
  */
-export function Connect(serverID: string): $CancellablePromise<void> {
-    return $Call.ByID(40315921, serverID);
+export function Connect(serverID: string): Promise<void> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(40315921, serverID) as any;
+    return $resultPromise;
 }
 
 /**
  * Disconnect disconnects from an IRC server
  */
-export function Disconnect(serverID: string): $CancellablePromise<void> {
-    return $Call.ByID(1942178755, serverID);
+export function Disconnect(serverID: string): Promise<void> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(1942178755, serverID) as any;
+    return $resultPromise;
 }
 
 /**
  * GetChannelList returns the stored channel list for a server
  */
-export function GetChannelList(serverID: string): $CancellablePromise<(irc$0.Channel | null)[]> {
-    return $Call.ByID(95596778, serverID).then(($result: any) => {
+export function GetChannelList(serverID: string): Promise<(irc$0.Channel | null)[]> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(95596778, serverID) as any;
+    let $typingPromise = $resultPromise.then(($result: any) => {
         return $$createType2($result);
-    });
+    }) as any;
+    $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
+    return $typingPromise;
 }
 
 /**
  * GetChannels returns joined channels for a server
  */
-export function GetChannels(serverID: string): $CancellablePromise<(irc$0.Channel | null)[]> {
-    return $Call.ByID(3143030007, serverID).then(($result: any) => {
+export function GetChannels(serverID: string): Promise<(irc$0.Channel | null)[]> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(3143030007, serverID) as any;
+    let $typingPromise = $resultPromise.then(($result: any) => {
         return $$createType2($result);
-    });
+    }) as any;
+    $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
+    return $typingPromise;
 }
 
 /**
  * GetClient returns the IRC client for a server
  */
-export function GetClient(serverID: string): $CancellablePromise<irc$0.Client | null> {
-    return $Call.ByID(726009680, serverID).then(($result: any) => {
+export function GetClient(serverID: string): Promise<irc$0.Client | null> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(726009680, serverID) as any;
+    let $typingPromise = $resultPromise.then(($result: any) => {
         return $$createType4($result);
-    });
+    }) as any;
+    $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
+    return $typingPromise;
 }
 
 /**
  * GetConnectionState returns the connection state for a server
  */
-export function GetConnectionState(serverID: string): $CancellablePromise<string> {
-    return $Call.ByID(3901049368, serverID);
+export function GetConnectionState(serverID: string): Promise<string> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(3901049368, serverID) as any;
+    return $resultPromise;
 }
 
 /**
  * GetCurrentNick returns the current nickname for a server
  */
-export function GetCurrentNick(serverID: string): $CancellablePromise<string> {
-    return $Call.ByID(1234567890, serverID);
+export function GetCurrentNick(serverID: string): Promise<string> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(2984378159, serverID) as any;
+    return $resultPromise;
 }
 
 /**
  * GetLogs returns IRC protocol logs for a server
  */
-export function GetLogs(serverID: string): $CancellablePromise<(irc$0.LogEntry | null)[]> {
-    return $Call.ByID(1990417652, serverID).then(($result: any) => {
+export function GetLogs(serverID: string): Promise<(irc$0.LogEntry | null)[]> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(1990417652, serverID) as any;
+    let $typingPromise = $resultPromise.then(($result: any) => {
         return $$createType7($result);
-    });
+    }) as any;
+    $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
+    return $typingPromise;
 }
 
 /**
  * GetMessages returns messages for a specific channel
  */
-export function GetMessages(serverID: string, channelName: string): $CancellablePromise<(irc$0.Message | null)[]> {
-    return $Call.ByID(1676833335, serverID, channelName).then(($result: any) => {
+export function GetMessages(serverID: string, channelName: string): Promise<(irc$0.Message | null)[]> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(1676833335, serverID, channelName) as any;
+    let $typingPromise = $resultPromise.then(($result: any) => {
         return $$createType10($result);
-    });
+    }) as any;
+    $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
+    return $typingPromise;
 }
 
 /**
  * GetServerTemplates returns available server templates/presets
  */
-export function GetServerTemplates(): $CancellablePromise<irc$0.ServerTemplate[]> {
-    return $Call.ByID(674556535).then(($result: any) => {
+export function GetServerTemplates(): Promise<irc$0.ServerTemplate[]> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(674556535) as any;
+    let $typingPromise = $resultPromise.then(($result: any) => {
         return $$createType12($result);
-    });
+    }) as any;
+    $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
+    return $typingPromise;
 }
 
 /**
  * GetServers returns all configured servers
  */
-export function GetServers(): $CancellablePromise<(irc$0.Server | null)[]> {
-    return $Call.ByID(49470725).then(($result: any) => {
+export function GetServers(): Promise<(irc$0.Server | null)[]> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(49470725) as any;
+    let $typingPromise = $resultPromise.then(($result: any) => {
         return $$createType15($result);
-    });
+    }) as any;
+    $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
+    return $typingPromise;
 }
 
 /**
  * IsChannelListInProgress returns true if a channel list request is still in progress
  */
-export function IsChannelListInProgress(serverID: string): $CancellablePromise<boolean> {
-    return $Call.ByID(109081460, serverID);
+export function IsChannelListInProgress(serverID: string): Promise<boolean> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(109081460, serverID) as any;
+    return $resultPromise;
 }
 
 /**
  * JoinChannel joins a channel on a server
  */
-export function JoinChannel(serverID: string, channel: string): $CancellablePromise<void> {
-    return $Call.ByID(429650360, serverID, channel);
+export function JoinChannel(serverID: string, channel: string): Promise<void> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(429650360, serverID, channel) as any;
+    return $resultPromise;
 }
 
 /**
  * ListChannels requests the channel list from a server
  */
-export function ListChannels(serverID: string): $CancellablePromise<void> {
-    return $Call.ByID(917222425, serverID);
+export function ListChannels(serverID: string): Promise<void> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(917222425, serverID) as any;
+    return $resultPromise;
 }
 
 /**
  * PartChannel leaves a channel
  */
-export function PartChannel(serverID: string, channel: string): $CancellablePromise<void> {
-    return $Call.ByID(1863091695, serverID, channel);
+export function PartChannel(serverID: string, channel: string): Promise<void> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(1863091695, serverID, channel) as any;
+    return $resultPromise;
 }
 
 /**
  * RemoveServer removes an IRC server
  */
-export function RemoveServer(serverID: string): $CancellablePromise<void> {
-    return $Call.ByID(559452962, serverID);
+export function RemoveServer(serverID: string): Promise<void> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(559452962, serverID) as any;
+    return $resultPromise;
 }
 
 /**
  * SendCTCP sends a CTCP command
  */
-export function SendCTCP(serverID: string, target: string, command: string): $CancellablePromise<void> {
-    return $Call.ByID(2179970915, serverID, target, command);
+export function SendCTCP(serverID: string, target: string, command: string): Promise<void> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(2179970915, serverID, target, command) as any;
+    return $resultPromise;
 }
 
 /**
  * SendMessage sends a message to a channel or user
  */
-export function SendMessage(serverID: string, target: string, message: string): $CancellablePromise<void> {
-    return $Call.ByID(2437650166, serverID, target, message);
+export function SendMessage(serverID: string, target: string, message: string): Promise<void> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(2437650166, serverID, target, message) as any;
+    return $resultPromise;
+}
+
+/**
+ * SetApp sets the Wails application instance for event emission
+ */
+export function SetApp(app: application$0.App | null): Promise<void> & { cancel(): void } {
+    let $resultPromise = $Call.ByID(3267893326, app) as any;
+    return $resultPromise;
 }
 
 // Private type creation functions

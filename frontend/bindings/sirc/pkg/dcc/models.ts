@@ -3,7 +3,7 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import { Create as $Create } from "@wailsio/runtime";
+import {Create as $Create} from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -62,7 +62,7 @@ export class Transfer {
             this["speed"] = 0;
         }
         if (!("status" in $$source)) {
-            this["status"] = TransferStatus.$zero;
+            this["status"] = ("" as TransferStatus);
         }
         if (!("ip" in $$source)) {
             this["ip"] = "";

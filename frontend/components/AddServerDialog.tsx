@@ -26,7 +26,7 @@ import { Label } from "@/components/ui/label";
 interface AddServerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onServerAdded?: () => void;
+  onServerAdded?: (serverId: string) => void;
 }
 
 interface ServerTemplate {
@@ -207,7 +207,7 @@ export function AddServerDialog({
       setSelectedPreset("new");
       setEditingServerId(null);
       onOpenChange(false);
-      onServerAdded?.();
+      onServerAdded?.(serverId);
     } catch (error) {
       console.error("Failed to add server:", error);
       alert(`Failed to add server: ${error}`);

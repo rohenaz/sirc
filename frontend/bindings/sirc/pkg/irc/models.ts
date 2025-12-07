@@ -3,7 +3,7 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import { Create as $Create } from "@wailsio/runtime";
+import {Create as $Create} from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -83,13 +83,19 @@ export class Client {
     "ChannelList": (Channel | null)[];
     "Logs": (LogEntry | null)[];
 
+    /**
+     * Event callbacks for real-time updates
+     */
+    "OnMessageReceived": any;
+    "OnLogAdded": any;
+
     /** Creates a new Client instance. */
     constructor($$source: Partial<Client> = {}) {
         if (!("Server" in $$source)) {
             this["Server"] = null;
         }
         if (!("State" in $$source)) {
-            this["State"] = ConnectionState.$zero;
+            this["State"] = (0 as ConnectionState);
         }
         if (!("Channels" in $$source)) {
             this["Channels"] = {};
@@ -99,6 +105,12 @@ export class Client {
         }
         if (!("Logs" in $$source)) {
             this["Logs"] = [];
+        }
+        if (!("OnMessageReceived" in $$source)) {
+            this["OnMessageReceived"] = null;
+        }
+        if (!("OnLogAdded" in $$source)) {
+            this["OnLogAdded"] = null;
         }
 
         Object.assign(this, $$source);
@@ -246,6 +258,16 @@ export class Server {
     "realName": string;
     "password"?: string;
 
+    /**
+     * Enable automatic reconnection on disconnect
+     */
+    "autoReconnect": boolean;
+
+    /**
+     * Password for NickServ authentication
+     */
+    "nickServPassword"?: string;
+
     /** Creates a new Server instance. */
     constructor($$source: Partial<Server> = {}) {
         if (!("id" in $$source)) {
@@ -271,6 +293,9 @@ export class Server {
         }
         if (!("realName" in $$source)) {
             this["realName"] = "";
+        }
+        if (!("autoReconnect" in $$source)) {
+            this["autoReconnect"] = false;
         }
 
         Object.assign(this, $$source);
